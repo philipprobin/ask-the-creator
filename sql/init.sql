@@ -13,14 +13,37 @@ CREATE TABLE IF NOT EXISTS embeddings (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Index for fast channel lookup
 CREATE INDEX IF NOT EXISTS idx_embeddings_channel ON embeddings(channel_id);
-
--- Index for cosine similarity search (HNSW for speed, or IVFFlat for smaller datasets)
--- Using cosine distance (1 - cosine_similarity)
-CREATE INDEX IF NOT EXISTS idx_embeddings_vector ON embeddings 
+CREATE INDEX IF NOT EXISTS idx_embeddings_vector ON embeddings
   USING hnsw (embedding vector_cosine_ops);
 
--- Optional: composite index for channel + vector search
-CREATE INDEX IF NOT EXISTS idx_embeddings_channel_vector ON embeddings(channel_id) 
-  INCLUDE (embedding);
+-- Embedded creators (library view)
+CREATE TABLE IF NOT EXISTS channels (
+  channel_id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  thumbnail TEXT,
+  last_embedded_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Per-video embedding overview + incremental dedup
+CREATE TABLE IF NOT EXISTS videos (
+  channel_id TEXT NOT NULL,
+  video_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  thumbnail TEXT,
+  chunk_count INT DEFAULT 0,
+  has_transcript BOOLEAN DEFAULT TRUE,
+  embedded_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (channel_id, video_id)
+);
+
+-- Chat history per channel
+CREATE TABLE IF NOT EXISTS chats (
+  id SERIAL PRIMARY KEY,
+  channel_id TEXT NOT NULL,
+  role TEXT NOT NULL,          -- 'user' | 'assistant'
+  content TEXT NOT NULL,
+  sources JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_chats_channel ON chats(channel_id, created_at);

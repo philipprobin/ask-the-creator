@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { embed } from "@/lib/embeddings";
-import { search, hasChannel } from "@/lib/store";
+import { search, hasChannel, saveChatTurn } from "@/lib/store";
 import { answer } from "@/lib/chat";
 
 export const runtime = "nodejs";
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     if (!channelId || !question) {
       return NextResponse.json({ error: "channelId and question required" }, { status: 400 });
     }
-    
+
     const hasEmbeddings = await hasChannel(channelId);
     if (!hasEmbeddings) {
       return NextResponse.json(
@@ -28,6 +28,14 @@ export async function POST(req: NextRequest) {
     const [qVec] = await embed([question]);
     const sources = await search(channelId, qVec, 6);
     const text = await answer(channelTitle, question, sources);
+
+    // Persist both turns (best-effort, don't fail the response on write error)
+    try {
+      await saveChatTurn(channelId, { role: "user", content: question });
+      await saveChatTurn(channelId, { role: "assistant", content: text, sources });
+    } catch (e) {
+      console.warn("Failed to persist chat turn:", e);
+    }
 
     return NextResponse.json({ answer: text, sources });
   } catch (e: any) {

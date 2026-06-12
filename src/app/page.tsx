@@ -1,17 +1,35 @@
 "use client";
 
 import { useState } from "react";
-import type { Channel } from "@/lib/types";
+import type { Channel, EmbeddedChannel } from "@/lib/types";
 import ChannelSearch from "@/components/ChannelSearch";
 import EmbedPanel, { type EmbedResult } from "@/components/EmbedPanel";
 import Chat from "@/components/Chat";
+import CreatorLibrary from "@/components/CreatorLibrary";
 
-type Stage = "search" | "embed" | "chat";
+type Stage = "home" | "embed" | "chat";
 
 export default function Home() {
-  const [stage, setStage] = useState<Stage>("search");
+  const [stage, setStage] = useState<Stage>("home");
   const [channel, setChannel] = useState<Channel | null>(null);
   const [result, setResult] = useState<EmbedResult | null>(null);
+
+  function openCreator(c: EmbeddedChannel) {
+    setChannel({
+      id: c.channelId,
+      title: c.title,
+      description: "",
+      thumbnail: c.thumbnail || "",
+    });
+    setResult({
+      channelId: c.channelId,
+      channelTitle: c.title,
+      videosProcessed: c.videoCount,
+      videosWithTranscript: c.videoCount,
+      chunks: c.chunkCount,
+    });
+    setStage("chat");
+  }
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
@@ -24,19 +42,27 @@ export default function Home() {
         </p>
       </header>
 
-      {stage === "search" && (
-        <ChannelSearch
-          onSelect={(c) => {
-            setChannel(c);
-            setStage("embed");
-          }}
-        />
+      {stage === "home" && (
+        <div className="space-y-8">
+          <CreatorLibrary onOpen={openCreator} />
+          <div>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500">
+              Neuen Creator hinzufügen
+            </h2>
+            <ChannelSearch
+              onSelect={(c) => {
+                setChannel(c);
+                setStage("embed");
+              }}
+            />
+          </div>
+        </div>
       )}
 
       {stage === "embed" && channel && (
         <EmbedPanel
           channel={channel}
-          onBack={() => setStage("search")}
+          onBack={() => setStage("home")}
           onEmbedded={(r) => {
             setResult(r);
             setStage("chat");
@@ -49,7 +75,7 @@ export default function Home() {
           channel={channel}
           result={result}
           onReset={() => {
-            setStage("search");
+            setStage("home");
             setChannel(null);
             setResult(null);
           }}

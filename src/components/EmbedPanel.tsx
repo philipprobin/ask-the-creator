@@ -37,6 +37,7 @@ export default function EmbedPanel({
         body: JSON.stringify({
           channelId: channel.id,
           channelTitle: channel.title,
+          channelThumbnail: channel.thumbnail,
           shortsOnly,
           includeVideos,
           maxVideos,

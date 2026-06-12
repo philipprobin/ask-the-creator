@@ -50,3 +50,20 @@ export interface ChatTurn {
   content: string;
   sources?: RetrievedSource[];
 }
+
+export interface EmbeddedChannel {
+  channelId: string;
+  title: string;
+  thumbnail?: string;
+  videoCount: number;
+  chunkCount: number;
+  lastEmbeddedAt: string;
+}
+
+export interface EmbeddedVideo {
+  videoId: string;
+  title: string;
+  thumbnail?: string;
+  chunkCount: number;
+  embeddedAt: string;
+}
