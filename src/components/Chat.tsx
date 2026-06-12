@@ -140,6 +140,8 @@ function VideoManager({
   const [videos, setVideos] = useState<EmbeddedVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [embedding, setEmbedding] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [progressText, setProgressText] = useState("");
   const [maxVideos, setMaxVideos] = useState(20);
   const [msg, setMsg] = useState("");
 
@@ -159,6 +161,9 @@ function VideoManager({
   async function embedMore() {
     setEmbedding(true);
     setMsg("");
+    setProgress(0);
+    setProgressText("");
+
     try {
       const res = await fetch("/api/embed", {
         method: "POST",
@@ -171,7 +176,21 @@ function VideoManager({
           order: "date",
         }),
       });
+
+      // Simulate progress
+      let simulatedProgress = 0;
+      const progressInterval = setInterval(() => {
+        simulatedProgress = Math.min(simulatedProgress + Math.random() * 20, 90);
+        setProgress(Math.floor(simulatedProgress));
+        const sim = Math.floor((simulatedProgress / 100) * maxVideos);
+        setProgressText(`${sim}/${maxVideos}`);
+      }, 250);
+
       const data = await res.json();
+      clearInterval(progressInterval);
+      setProgress(100);
+      setProgressText(`${data.newVideos || 0}/${maxVideos}`);
+
       if (!res.ok) throw new Error(data.error || "Fehler");
       if (data.newVideos === 0) {
         setMsg("Alle Videos embedded.");
@@ -183,6 +202,10 @@ function VideoManager({
       setMsg(`⚠️ ${e.message}`);
     } finally {
       setEmbedding(false);
+      setTimeout(() => {
+        setProgress(0);
+        setProgressText("");
+      }, 500);
     }
   }
 
@@ -226,8 +249,24 @@ function VideoManager({
           value={maxVideos}
           onChange={(e) => setMaxVideos(parseInt(e.target.value))}
           className="w-full"
+          disabled={embedding}
         />
       </div>
+
+      {embedding && (
+        <div className="mb-3 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-neutral-400">Embeddet…</span>
+            <span className="font-semibold text-accent">{progressText}</span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-bg">
+            <div
+              className="h-full bg-accent transition-all duration-200"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <button

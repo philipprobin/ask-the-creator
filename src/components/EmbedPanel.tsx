@@ -25,11 +25,14 @@ export default function EmbedPanel({
   const [maxVideos, setMaxVideos] = useState(10);
   const [order, setOrder] = useState<"date" | "viewCount">("date");
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
 
   async function runEmbed() {
     setLoading(true);
     setError("");
+    setProgress(0);
+
     try {
       const res = await fetch("/api/embed", {
         method: "POST",
@@ -44,13 +47,25 @@ export default function EmbedPanel({
           order,
         }),
       });
+
+      // Simulate progress (since API doesn't stream)
+      let simulatedProgress = 0;
+      const progressInterval = setInterval(() => {
+        simulatedProgress = Math.min(simulatedProgress + Math.random() * 25, 90);
+        setProgress(Math.floor(simulatedProgress));
+      }, 200);
+
       const data = await res.json();
+      clearInterval(progressInterval);
+      setProgress(100);
+
       if (!res.ok) throw new Error(data.error || "Embedding fehlgeschlagen");
       onEmbedded(data);
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
+      setTimeout(() => setProgress(0), 500);
     }
   }
 
@@ -81,6 +96,7 @@ export default function EmbedPanel({
             checked={shortsOnly}
             onChange={(e) => setShortsOnly(e.target.checked)}
             className="h-4 w-4"
+            disabled={loading}
           />
         </label>
 
@@ -91,6 +107,7 @@ export default function EmbedPanel({
             checked={includeVideos}
             onChange={(e) => setIncludeVideos(e.target.checked)}
             className="h-4 w-4"
+            disabled={loading}
           />
         </label>
 
@@ -106,6 +123,7 @@ export default function EmbedPanel({
             value={maxVideos}
             onChange={(e) => setMaxVideos(parseInt(e.target.value))}
             className="w-full"
+            disabled={loading}
           />
           <div className="mt-1 flex justify-between text-xs text-neutral-500">
             <span>10</span>
@@ -119,12 +137,28 @@ export default function EmbedPanel({
             value={order}
             onChange={(e) => setOrder(e.target.value as "date" | "viewCount")}
             className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent sm:text-base"
+            disabled={loading}
           >
             <option value="date">Neueste zuerst</option>
             <option value="viewCount">Meistgesehen zuerst</option>
           </select>
         </div>
       </div>
+
+      {loading && (
+        <div className="mt-5 space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-neutral-400">Embeddet…</span>
+            <span className="font-semibold text-accent">{progress}%</span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-bg">
+            <div
+              className="h-full bg-accent transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mt-4 rounded-lg border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-400">
