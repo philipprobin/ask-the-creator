@@ -28,9 +28,10 @@ export default function EmbedPanel({
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState("");
   const [error, setError] = useState("");
+  const [debug, setDebug] = useState("");
 
   async function runEmbed() {
-    console.log("🚀 runEmbed clicked for:", channel.id);
+    setDebug("▶️ Start...");
     setLoading(true);
     setError("");
     setProgress(0);
@@ -46,53 +47,63 @@ export default function EmbedPanel({
         maxVideos,
         order,
       };
-      console.log("📤 Sending embed request:", payload);
+      setDebug(`📤 Sende ${maxVideos} Videos...`);
 
-      // Start embed (don't await immediately)
+      // Start embed
       const embedPromise = fetch("/api/embed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      // Poll for real status while embed is running
+      // Poll for status
       let done = false;
       let pollCount = 0;
-      while (!done) {
+      while (!done && pollCount < 120) {
+        // max 60 sec
         await new Promise((resolve) => setTimeout(resolve, 500));
         pollCount++;
 
         try {
           const statusUrl = `/api/embed/status?channelId=${encodeURIComponent(channel.id)}`;
-          console.log(`📊 Poll #${pollCount}: ${statusUrl}`);
           const statusRes = await fetch(statusUrl);
           const status = await statusRes.json();
-          console.log(`   Status:`, status);
 
           if (status.total > 0) {
             const pct = Math.floor((status.processed / status.total) * 100);
             setProgress(pct);
             setProgressText(`${status.processed}/${status.total}`);
+            setDebug(`📊 Poll ${pollCount}: ${status.processed}/${status.total}`);
             done = status.done;
+          } else {
+            setDebug(`⏳ Poll ${pollCount}: warte auf Status...`);
           }
-        } catch (e) {
-          console.error("❌ Status poll failed", e);
+        } catch (e: any) {
+          setDebug(`❌ Poll fehler: ${e.message}`);
         }
       }
 
-      // Now await the actual response
+      if (pollCount >= 120) {
+        setDebug(`⏱️ Timeout nach 60 sec`);
+      }
+
+      // Await response
       const res = await embedPromise;
       const data = await res.json();
-      console.log("✅ Embed response:", data);
 
       setProgress(100);
       setProgressText(`${data.videosProcessed}/${maxVideos}`);
 
-      if (!res.ok) throw new Error(data.error || "Embedding fehlgeschlagen");
+      if (!res.ok) {
+        setDebug(`❌ Server error: ${data.error}`);
+        throw new Error(data.error || "Embedding fehlgeschlagen");
+      }
+
+      setDebug(`✅ Fertig! ${data.videosProcessed} Videos, ${data.chunks} Chunks`);
       onEmbedded(data);
     } catch (e: any) {
-      console.error("❌ Error:", e);
       setError(e.message);
+      setDebug(`❌ Error: ${e.message}`);
     } finally {
       setLoading(false);
       setTimeout(() => {
@@ -190,6 +201,11 @@ export default function EmbedPanel({
               style={{ width: `${progress}%` }}
             />
           </div>
+          {debug && (
+            <div className="mt-2 rounded-lg bg-neutral-900 p-2 text-xs text-neutral-400">
+              {debug}
+            </div>
+          )}
         </div>
       )}
 
