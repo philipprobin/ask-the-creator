@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import AuthGate from "@/components/AuthGate";
 import "./globals.css";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "ask-the-creator",
-  description: "Chat with any YouTuber, powered by their own video transcripts.",
+  description: "Chatte mit jedem YouTuber – auf Basis seiner eigenen Video-Transkripte.",
 };
 
 export default function RootLayout({
@@ -13,7 +17,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="de">
-      <body className="min-h-screen antialiased">{children}</body>
+      <body className={inter.className}>
+        <AuthGate>{children}</AuthGate>
+      </body>
     </html>
   );
 }
