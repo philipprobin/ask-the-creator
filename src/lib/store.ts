@@ -1,32 +1,51 @@
 import type { Chunk, RetrievedSource } from "./types";
 import { cosine } from "./embeddings";
+import { hasDatabase } from "./config";
 
 /**
- * In-memory vector store keyed by channelId.
- * Survives within a single serverless instance only; on Vercel this means
- * embeddings live for the lifetime of the warm lambda. Good enough for v1 /
- * single-session demo. Swap for pgvector (DATABASE_URL) for persistence.
+ * Unified store interface that switches between in-memory and Postgres
+ * based on DATABASE_URL availability.
  */
-const store = new Map<string, Chunk[]>();
 
-export function saveChunks(channelId: string, chunks: Chunk[]) {
-  store.set(channelId, chunks);
+// In-memory fallback (same as before)
+const memStore = new Map<string, Chunk[]>();
+
+export async function saveChunks(channelId: string, chunks: Chunk[]) {
+  if (hasDatabase()) {
+    const db = await import("./db");
+    return db.saveChunks(channelId, chunks);
+  }
+  memStore.set(channelId, chunks);
 }
 
-export function hasChannel(channelId: string): boolean {
-  return store.has(channelId) && (store.get(channelId)?.length ?? 0) > 0;
+export async function hasChannel(channelId: string): Promise<boolean> {
+  if (hasDatabase()) {
+    const db = await import("./db");
+    return db.hasChannel(channelId);
+  }
+  return memStore.has(channelId) && (memStore.get(channelId)?.length ?? 0) > 0;
 }
 
-export function channelChunkCount(channelId: string): number {
-  return store.get(channelId)?.length ?? 0;
+export async function channelChunkCount(channelId: string): Promise<number> {
+  if (hasDatabase()) {
+    const db = await import("./db");
+    return db.channelChunkCount(channelId);
+  }
+  return memStore.get(channelId)?.length ?? 0;
 }
 
-export function search(
+export async function search(
   channelId: string,
   queryEmbedding: number[],
   topK = 6
-): RetrievedSource[] {
-  const chunks = store.get(channelId) || [];
+): Promise<RetrievedSource[]> {
+  if (hasDatabase()) {
+    const db = await import("./db");
+    return db.search(channelId, queryEmbedding, topK);
+  }
+
+  // In-memory fallback
+  const chunks = memStore.get(channelId) || [];
   const scored = chunks
     .filter((c) => c.embedding)
     .map((c) => ({
