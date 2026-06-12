@@ -165,7 +165,8 @@ function VideoManager({
     setProgressText("");
 
     try {
-      const res = await fetch("/api/embed", {
+      // Start embed in background (don't await yet)
+      const embedPromise = fetch("/api/embed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -177,17 +178,32 @@ function VideoManager({
         }),
       });
 
-      // Simulate progress
-      let simulatedProgress = 0;
-      const progressInterval = setInterval(() => {
-        simulatedProgress = Math.min(simulatedProgress + Math.random() * 20, 90);
-        setProgress(Math.floor(simulatedProgress));
-        const sim = Math.floor((simulatedProgress / 100) * maxVideos);
-        setProgressText(`${sim}/${maxVideos}`);
-      }, 250);
+      // Poll for status every 500ms
+      let done = false;
+      while (!done) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
+        try {
+          const statusRes = await fetch(
+            `/api/embed/status?channelId=${encodeURIComponent(channel.id)}`
+          );
+          const status = await statusRes.json();
+
+          if (status.total > 0) {
+            const pct = Math.floor((status.processed / status.total) * 100);
+            setProgress(pct);
+            setProgressText(`${status.processed}/${status.total}`);
+            done = status.done;
+          }
+        } catch (e) {
+          console.error("Status poll failed", e);
+        }
+      }
+
+      // Now await the actual response
+      const res = await embedPromise;
       const data = await res.json();
-      clearInterval(progressInterval);
+
       setProgress(100);
       setProgressText(`${data.newVideos || 0}/${maxVideos}`);
 

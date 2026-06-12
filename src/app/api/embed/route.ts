@@ -3,6 +3,7 @@ import { listVideos } from "@/lib/youtube";
 import { fetchTranscript, chunkSegments } from "@/lib/transcript";
 import { embed } from "@/lib/embeddings";
 import { saveChunks, channelChunkCount, getEmbeddedVideoIds } from "@/lib/store";
+import { setEmbedStatus } from "@/lib/embed-status";
 import type { Chunk, EmbedFilters } from "@/lib/types";
 import type { SaveMeta } from "@/lib/db";
 
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
     const filters: EmbedFilters = {
       shortsOnly: !!body.shortsOnly,
       includeVideos: body.includeVideos !== false,
-      maxVideos: Math.min(Math.max(parseInt(body.maxVideos, 10) || 10, 1), 50),
+      maxVideos: Math.min(Math.max(parseInt(body.maxVideos, 10) || 10, 1), 100),
       order: body.order === "viewCount" ? "viewCount" : "date",
     };
     if (!channelId) {
@@ -26,10 +27,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch a larger candidate pool so we can skip already-embedded videos
-    // and still reach maxVideos NEW ones.
     const candidatePool = await listVideos(channelId, {
       ...filters,
-      maxVideos: Math.min(filters.maxVideos * 3, 50),
+      maxVideos: Math.min(filters.maxVideos * 3, 100),
     });
     if (candidatePool.length === 0) {
       return NextResponse.json({ error: "no videos matched filters" }, { status: 404 });
@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
       .slice(0, filters.maxVideos);
 
     if (newVideos.length === 0) {
+      setEmbedStatus(channelId, 0, 0, true);
       return NextResponse.json({
         ok: true,
         channelId,
@@ -54,15 +55,23 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    setEmbedStatus(channelId, 0, newVideos.length, false);
+
     const allChunks: Chunk[] = [];
     const processedVideos: SaveMeta["videos"] = [];
     let withTranscript = 0;
 
-    for (const v of newVideos) {
+    for (let i = 0; i < newVideos.length; i++) {
+      const v = newVideos[i];
       processedVideos.push({ videoId: v.id, title: v.title, thumbnail: v.thumbnail });
+
       const segs = await fetchTranscript(v.id, v.title);
-      if (!segs.length) continue;
+      if (!segs.length) {
+        setEmbedStatus(channelId, i + 1, newVideos.length, false);
+        continue;
+      }
       withTranscript++;
+
       const pieces = chunkSegments(segs);
       for (const p of pieces) {
         allChunks.push({
@@ -72,6 +81,8 @@ export async function POST(req: NextRequest) {
           start: p.start,
         });
       }
+
+      setEmbedStatus(channelId, i + 1, newVideos.length, false);
     }
 
     // Embed in batches
@@ -88,6 +99,8 @@ export async function POST(req: NextRequest) {
       videos: processedVideos,
     };
     await saveChunks(channelId, allChunks, meta);
+
+    setEmbedStatus(channelId, newVideos.length, newVideos.length, true);
 
     return NextResponse.json({
       ok: true,
