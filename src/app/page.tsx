@@ -21,6 +21,17 @@ export default function Home() {
       description: "",
       thumbnail: c.thumbnail || "",
     });
+    // Go to embed screen first (to allow re-embedding or viewing the embed panel)
+    setStage("embed");
+  }
+
+  function openChat(c: EmbeddedChannel) {
+    setChannel({
+      id: c.channelId,
+      title: c.title,
+      description: "",
+      thumbnail: c.thumbnail || "",
+    });
     setResult({
       channelId: c.channelId,
       channelTitle: c.title,
@@ -45,7 +56,7 @@ export default function Home() {
       <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         {stage === "home" && (
           <div className="mx-auto max-w-2xl space-y-8">
-            <CreatorLibrary onOpen={openCreator} />
+            <CreatorLibrary onOpen={openCreator} onChat={openChat} />
             <div>
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500">
                 Neuen Creator hinzufügen

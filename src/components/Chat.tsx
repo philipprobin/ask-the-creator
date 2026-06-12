@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import type { Channel, ChatTurn, RetrievedSource, EmbeddedVideo } from "@/lib/types";
+import type { Channel, ChatTurn, RetrievedSource } from "@/lib/types";
 import type { EmbedResult } from "./EmbedPanel";
 
 export default function Chat({
@@ -17,7 +17,6 @@ export default function Chat({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
-  const [showVideos, setShowVideos] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -75,22 +74,12 @@ export default function Chat({
           </div>
         </div>
         <button
-          onClick={() => setShowVideos((v) => !v)}
-          className="flex-shrink-0 text-xs text-neutral-400 hover:text-white sm:text-sm"
-        >
-          Videos
-        </button>
-        <button
           onClick={onReset}
           className="flex-shrink-0 text-xs text-neutral-400 hover:text-white sm:text-sm"
         >
           zurück
         </button>
       </div>
-
-      {showVideos && (
-        <VideoManager channel={channel} onClose={() => setShowVideos(false)} />
-      )}
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-4 sm:space-y-4 sm:px-4">
         {historyLoading && (
@@ -125,174 +114,6 @@ export default function Chat({
             Senden
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function VideoManager({
-  channel,
-  onClose,
-}: {
-  channel: Channel;
-  onClose: () => void;
-}) {
-  const [videos, setVideos] = useState<EmbeddedVideo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [embedding, setEmbedding] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [progressText, setProgressText] = useState("");
-  const [maxVideos, setMaxVideos] = useState(20);
-  const [msg, setMsg] = useState("");
-
-  function load() {
-    setLoading(true);
-    fetch(`/api/channels/${encodeURIComponent(channel.id)}/videos`)
-      .then((r) => r.json())
-      .then((d) => setVideos(d.videos || []))
-      .catch(() => setVideos([]))
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(() => {
-    load();
-  }, [channel.id]);
-
-  async function embedMore() {
-    setEmbedding(true);
-    setMsg("");
-    setProgress(0);
-    setProgressText("");
-
-    try {
-      // Start embed in background (don't await yet)
-      const embedPromise = fetch("/api/embed", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          channelId: channel.id,
-          channelTitle: channel.title,
-          channelThumbnail: channel.thumbnail,
-          maxVideos,
-          order: "date",
-        }),
-      });
-
-      // Poll for status every 500ms
-      let done = false;
-      while (!done) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        try {
-          const statusRes = await fetch(
-            `/api/embed/status?channelId=${encodeURIComponent(channel.id)}`
-          );
-          const status = await statusRes.json();
-
-          if (status.total > 0) {
-            const pct = Math.floor((status.processed / status.total) * 100);
-            setProgress(pct);
-            setProgressText(`${status.processed}/${status.total}`);
-            done = status.done;
-          }
-        } catch (e) {
-          console.error("Status poll failed", e);
-        }
-      }
-
-      // Now await the actual response
-      const res = await embedPromise;
-      const data = await res.json();
-
-      setProgress(100);
-      setProgressText(`${data.newVideos || 0}/${maxVideos}`);
-
-      if (!res.ok) throw new Error(data.error || "Fehler");
-      if (data.newVideos === 0) {
-        setMsg("Alle Videos embedded.");
-      } else {
-        setMsg(`+${data.newVideos} Videos`);
-        load();
-      }
-    } catch (e: any) {
-      setMsg(`⚠️ ${e.message}`);
-    } finally {
-      setEmbedding(false);
-      setTimeout(() => {
-        setProgress(0);
-        setProgressText("");
-      }, 500);
-    }
-  }
-
-  return (
-    <div className="border-b border-border bg-bg/50 px-3 py-3 sm:px-4 sm:py-4">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-xs font-semibold sm:text-sm">Videos ({videos.length})</span>
-        <button onClick={onClose} className="text-xs text-neutral-400 hover:text-white">
-          ✕
-        </button>
-      </div>
-
-      {loading ? (
-        <p className="text-xs text-neutral-500">Lade…</p>
-      ) : (
-        <div className="mb-3 max-h-32 space-y-1 overflow-y-auto sm:max-h-48">
-          {videos.map((v) => (
-            <a
-              key={v.videoId}
-              href={`https://www.youtube.com/watch?v=${v.videoId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between gap-2 rounded px-2 py-1 text-xs hover:bg-panel sm:text-sm"
-            >
-              <span className="truncate text-neutral-300">{v.title}</span>
-              <span className="shrink-0 text-neutral-500">{v.chunkCount}</span>
-            </a>
-          ))}
-        </div>
-      )}
-
-      <div className="mb-3 space-y-2">
-        <label className="block text-xs sm:text-sm">
-          Videos: <span className="font-semibold text-accent">{maxVideos}</span>
-        </label>
-        <input
-          type="range"
-          min="10"
-          max="100"
-          step="10"
-          value={maxVideos}
-          onChange={(e) => setMaxVideos(parseInt(e.target.value))}
-          className="w-full"
-          disabled={embedding}
-        />
-      </div>
-
-      {embedding && (
-        <div className="mb-3 space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-neutral-400">Embeddet…</span>
-            <span className="font-semibold text-accent">{progressText}</span>
-          </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-bg">
-            <div
-              className="h-full bg-accent transition-all duration-200"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <button
-          onClick={embedMore}
-          disabled={embedding}
-          className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold disabled:opacity-50 sm:px-4 sm:text-sm"
-        >
-          {embedding ? "…" : `+ ${maxVideos} Videos`}
-        </button>
-        {msg && <span className="text-xs text-neutral-400 sm:text-sm">{msg}</span>}
       </div>
     </div>
   );
