@@ -26,15 +26,18 @@ export default function EmbedPanel({
   const [order, setOrder] = useState<"date" | "viewCount">("date");
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [progressText, setProgressText] = useState("");
   const [error, setError] = useState("");
 
   async function runEmbed() {
     setLoading(true);
     setError("");
     setProgress(0);
+    setProgressText("");
 
     try {
-      const res = await fetch("/api/embed", {
+      // Start embed (don't await immediately)
+      const embedPromise = fetch("/api/embed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -48,16 +51,34 @@ export default function EmbedPanel({
         }),
       });
 
-      // Simulate progress (since API doesn't stream)
-      let simulatedProgress = 0;
-      const progressInterval = setInterval(() => {
-        simulatedProgress = Math.min(simulatedProgress + Math.random() * 25, 90);
-        setProgress(Math.floor(simulatedProgress));
-      }, 200);
+      // Poll for real status while embed is running
+      let done = false;
+      while (!done) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
+        try {
+          const statusRes = await fetch(
+            `/api/embed/status?channelId=${encodeURIComponent(channel.id)}`
+          );
+          const status = await statusRes.json();
+
+          if (status.total > 0) {
+            const pct = Math.floor((status.processed / status.total) * 100);
+            setProgress(pct);
+            setProgressText(`${status.processed}/${status.total}`);
+            done = status.done;
+          }
+        } catch (e) {
+          console.error("Status poll failed", e);
+        }
+      }
+
+      // Now await the actual response
+      const res = await embedPromise;
       const data = await res.json();
-      clearInterval(progressInterval);
+
       setProgress(100);
+      setProgressText(`${data.videosProcessed}/${maxVideos}`);
 
       if (!res.ok) throw new Error(data.error || "Embedding fehlgeschlagen");
       onEmbedded(data);
@@ -65,7 +86,10 @@ export default function EmbedPanel({
       setError(e.message);
     } finally {
       setLoading(false);
-      setTimeout(() => setProgress(0), 500);
+      setTimeout(() => {
+        setProgress(0);
+        setProgressText("");
+      }, 500);
     }
   }
 
@@ -149,11 +173,11 @@ export default function EmbedPanel({
         <div className="mt-5 space-y-2">
           <div className="flex items-center justify-between text-sm">
             <span className="text-neutral-400">Embeddet…</span>
-            <span className="font-semibold text-accent">{progress}%</span>
+            <span className="font-semibold text-accent">{progressText || "0%"}</span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-bg">
             <div
-              className="h-full bg-accent transition-all duration-300"
+              className="h-full bg-accent transition-all duration-200"
               style={{ width: `${progress}%` }}
             />
           </div>

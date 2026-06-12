@@ -22,6 +22,9 @@ export async function POST(req: NextRequest) {
       maxVideos: Math.min(Math.max(parseInt(body.maxVideos, 10) || 10, 1), 100),
       order: body.order === "viewCount" ? "viewCount" : "date",
     };
+    
+    console.log(`[EMBED] Starting embed for ${channelId}, maxVideos=${filters.maxVideos}`);
+    
     if (!channelId) {
       return NextResponse.json({ error: "channelId required" }, { status: 400 });
     }
@@ -31,6 +34,8 @@ export async function POST(req: NextRequest) {
       ...filters,
       maxVideos: Math.min(filters.maxVideos * 3, 100),
     });
+    console.log(`[EMBED] Found ${candidatePool.length} candidate videos`);
+    
     if (candidatePool.length === 0) {
       return NextResponse.json({ error: "no videos matched filters" }, { status: 404 });
     }
@@ -41,8 +46,10 @@ export async function POST(req: NextRequest) {
       .filter((v) => !alreadyEmbedded.has(v.id))
       .slice(0, filters.maxVideos);
 
+    console.log(`[EMBED] ${newVideos.length} new videos to embed (${alreadyEmbedded.size} already embedded)`);
+
     if (newVideos.length === 0) {
-      setEmbedStatus(channelId, 0, 0, true);
+      await setEmbedStatus(channelId, 0, 0, true);
       return NextResponse.json({
         ok: true,
         channelId,
@@ -55,7 +62,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    setEmbedStatus(channelId, 0, newVideos.length, false);
+    await setEmbedStatus(channelId, 0, newVideos.length, false);
+    console.log(`[EMBED] Set initial status: 0/${newVideos.length}`);
 
     const allChunks: Chunk[] = [];
     const processedVideos: SaveMeta["videos"] = [];
@@ -65,14 +73,18 @@ export async function POST(req: NextRequest) {
       const v = newVideos[i];
       processedVideos.push({ videoId: v.id, title: v.title, thumbnail: v.thumbnail });
 
+      console.log(`[EMBED] Processing video ${i + 1}/${newVideos.length}: ${v.title}`);
       const segs = await fetchTranscript(v.id, v.title);
       if (!segs.length) {
-        setEmbedStatus(channelId, i + 1, newVideos.length, false);
+        console.log(`[EMBED] No transcript for ${v.id}`);
+        await setEmbedStatus(channelId, i + 1, newVideos.length, false);
         continue;
       }
       withTranscript++;
 
       const pieces = chunkSegments(segs);
+      console.log(`[EMBED] Split into ${pieces.length} chunks`);
+      
       for (const p of pieces) {
         allChunks.push({
           videoId: v.id,
@@ -82,13 +94,17 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      setEmbedStatus(channelId, i + 1, newVideos.length, false);
+      await setEmbedStatus(channelId, i + 1, newVideos.length, false);
+      console.log(`[EMBED] Updated status: ${i + 1}/${newVideos.length}`);
     }
+
+    console.log(`[EMBED] Total chunks: ${allChunks.length}, transcripts: ${withTranscript}`);
 
     // Embed in batches
     const batchSize = 64;
     for (let i = 0; i < allChunks.length; i += batchSize) {
       const batch = allChunks.slice(i, i + batchSize);
+      console.log(`[EMBED] Embedding batch ${i}-${i + batch.length}`);
       const vectors = await embed(batch.map((c) => c.text));
       batch.forEach((c, j) => (c.embedding = vectors[j]));
     }
@@ -98,9 +114,11 @@ export async function POST(req: NextRequest) {
       channelThumbnail,
       videos: processedVideos,
     };
+    console.log(`[EMBED] Saving to DB...`);
     await saveChunks(channelId, allChunks, meta);
 
-    setEmbedStatus(channelId, newVideos.length, newVideos.length, true);
+    await setEmbedStatus(channelId, newVideos.length, newVideos.length, true);
+    console.log(`[EMBED] Complete!`);
 
     return NextResponse.json({
       ok: true,
@@ -112,6 +130,7 @@ export async function POST(req: NextRequest) {
       chunks: await channelChunkCount(channelId),
     });
   } catch (e: any) {
+    console.error(`[EMBED] Error:`, e);
     return NextResponse.json({ error: e.message || "embed failed" }, { status: 500 });
   }
 }

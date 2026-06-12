@@ -10,9 +10,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "channelId required" }, { status: 400 });
     }
 
-    const status = getEmbedStatus(channelId);
+    console.log(`[STATUS] Checking embed status for ${channelId}`);
+    const status = await getEmbedStatus(channelId);
+    console.log(`[STATUS] Result:`, status);
+    
     return NextResponse.json(status);
   } catch (e: any) {
+    console.error(`[STATUS] Error:`, e.message);
     return NextResponse.json({ error: e.message || "failed to get status" }, { status: 500 });
   }
 }
