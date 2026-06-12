@@ -20,7 +20,6 @@ export default function Chat({
   const [showVideos, setShowVideos] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
-  // Load chat history on open
   useEffect(() => {
     fetch(`/api/chat/history?channelId=${encodeURIComponent(channel.id)}`)
       .then((r) => r.json())
@@ -63,66 +62,65 @@ export default function Chat({
   }
 
   return (
-    <div className="flex h-[80vh] flex-col rounded-xl border border-border bg-panel">
-      <div className="flex items-center gap-3 border-b border-border p-4">
+    <div className="flex h-[100dvh] flex-col rounded-none sm:rounded-xl sm:border sm:border-border">
+      <div className="flex flex-shrink-0 items-center gap-2 border-b border-border bg-bg px-3 py-3 sm:gap-3 sm:px-4 sm:py-4">
         {channel.thumbnail && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={channel.thumbnail} alt="" className="h-10 w-10 rounded-full object-cover" />
+          <img src={channel.thumbnail} alt="" className="h-8 w-8 rounded-full object-cover sm:h-10 sm:w-10" />
         )}
         <div className="min-w-0 flex-1">
-          <div className="truncate font-semibold">{channel.title}</div>
+          <div className="truncate text-sm font-semibold sm:text-base">{channel.title}</div>
           <div className="text-xs text-neutral-500">
-            {result.chunks} Chunks aus {result.videosProcessed} Videos
+            {result.chunks} Chunks · {result.videosProcessed} Videos
           </div>
         </div>
         <button
           onClick={() => setShowVideos((v) => !v)}
-          className="text-sm text-neutral-400 hover:text-white"
+          className="flex-shrink-0 text-xs text-neutral-400 hover:text-white sm:text-sm"
         >
           Videos
         </button>
-        <button onClick={onReset} className="text-sm text-neutral-400 hover:text-white">
+        <button
+          onClick={onReset}
+          className="flex-shrink-0 text-xs text-neutral-400 hover:text-white sm:text-sm"
+        >
           zurück
         </button>
       </div>
 
       {showVideos && (
-        <VideoManager
-          channel={channel}
-          onClose={() => setShowVideos(false)}
-        />
+        <VideoManager channel={channel} onClose={() => setShowVideos(false)} />
       )}
 
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
+      <div className="flex-1 space-y-3 overflow-y-auto px-3 py-4 sm:space-y-4 sm:px-4">
         {historyLoading && (
-          <p className="mt-10 text-center text-neutral-500">Lade Verlauf…</p>
+          <p className="text-center text-sm text-neutral-500">Lade Verlauf…</p>
         )}
         {!historyLoading && turns.length === 0 && (
-          <p className="mt-10 text-center text-neutral-500">
-            Frag {channel.title} etwas — die Antwort kommt im Stil des Creators,
-            mit Quellen aus den Videos.
+          <p className="text-center text-sm text-neutral-500">
+            Frag {channel.title} etwas — die Antwort kommt im Stil des Creators.
           </p>
         )}
         {turns.map((t, i) => (
           <Message key={i} turn={t} />
         ))}
-        {loading && <p className="text-neutral-500">…denkt nach</p>}
+        {loading && <p className="text-sm text-neutral-500">…denkt nach</p>}
         <div ref={endRef} />
       </div>
 
-      <div className="border-t border-border p-3">
+      <div className="flex-shrink-0 border-t border-border bg-bg px-3 py-3 sm:px-4 sm:py-3">
         <div className="flex gap-2">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder="Frage stellen…"
-            className="flex-1 rounded-lg border border-border bg-bg px-4 py-3 outline-none focus:border-accent"
+            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
+            placeholder="Frage…"
+            className="flex-1 rounded-lg border border-border bg-panel px-3 py-2 text-sm outline-none focus:border-accent sm:px-4 sm:py-3 sm:text-base"
           />
           <button
             onClick={send}
             disabled={loading}
-            className="rounded-lg bg-accent px-5 font-semibold disabled:opacity-50"
+            className="flex-shrink-0 rounded-lg bg-accent px-3 py-2 text-sm font-semibold disabled:opacity-50 sm:px-5 sm:py-3 sm:text-base"
           >
             Senden
           </button>
@@ -153,7 +151,9 @@ function VideoManager({
       .finally(() => setLoading(false));
   }
 
-  useEffect(load, [channel.id]);
+  useEffect(() => {
+    load();
+  }, [channel.id]);
 
   async function embedMore() {
     setEmbedding(true);
@@ -173,9 +173,9 @@ function VideoManager({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Fehler");
       if (data.newVideos === 0) {
-        setMsg("Alle passenden Videos sind bereits embedded.");
+        setMsg("Alle Videos embedded.");
       } else {
-        setMsg(`+${data.newVideos} Videos embedded (${data.videosWithTranscript} mit Transkript).`);
+        setMsg(`+${data.newVideos} Videos`);
         load();
       }
     } catch (e: any) {
@@ -186,44 +186,42 @@ function VideoManager({
   }
 
   return (
-    <div className="border-b border-border bg-bg/50 p-4">
+    <div className="border-b border-border bg-bg/50 px-3 py-3 sm:px-4 sm:py-4">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-semibold">
-          Embeddete Videos ({videos.length})
-        </span>
+        <span className="text-xs font-semibold sm:text-sm">Videos ({videos.length})</span>
         <button onClick={onClose} className="text-xs text-neutral-400 hover:text-white">
-          schließen
+          ✕
         </button>
       </div>
 
       {loading ? (
         <p className="text-xs text-neutral-500">Lade…</p>
       ) : (
-        <div className="max-h-48 space-y-1 overflow-y-auto">
+        <div className="mb-3 max-h-32 space-y-1 overflow-y-auto sm:max-h-48">
           {videos.map((v) => (
             <a
               key={v.videoId}
               href={`https://www.youtube.com/watch?v=${v.videoId}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between gap-2 rounded px-2 py-1 text-xs hover:bg-panel"
+              className="flex items-center justify-between gap-2 rounded px-2 py-1 text-xs hover:bg-panel sm:text-sm"
             >
               <span className="truncate text-neutral-300">{v.title}</span>
-              <span className="shrink-0 text-neutral-500">{v.chunkCount} chunks</span>
+              <span className="shrink-0 text-neutral-500">{v.chunkCount}</span>
             </a>
           ))}
         </div>
       )}
 
-      <div className="mt-3 flex items-center gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <button
           onClick={embedMore}
           disabled={embedding}
-          className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+          className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold disabled:opacity-50 sm:px-4 sm:text-sm"
         >
-          {embedding ? "embeddet…" : "+ Mehr Videos embedden"}
+          {embedding ? "…" : "+ Videos"}
         </button>
-        {msg && <span className="text-xs text-neutral-400">{msg}</span>}
+        {msg && <span className="text-xs text-neutral-400 sm:text-sm">{msg}</span>}
       </div>
     </div>
   );
@@ -234,15 +232,15 @@ function Message({ turn }: { turn: ChatTurn }) {
   return (
     <div className={isUser ? "text-right" : "text-left"}>
       <div
-        className={`inline-block max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2 ${
-          isUser ? "bg-accent text-white" : "bg-bg border border-border"
+        className={`inline-block max-w-[85%] whitespace-pre-wrap rounded-xl px-3 py-2 text-sm sm:rounded-2xl sm:px-4 sm:py-2 ${
+          isUser ? "bg-accent text-white" : "bg-panel border border-border"
         }`}
       >
         {turn.content}
       </div>
       {turn.sources && turn.sources.length > 0 && (
         <div className="mt-2 space-y-1 text-left">
-          {turn.sources.slice(0, 4).map((s, i) => (
+          {turn.sources.slice(0, 3).map((s, i) => (
             <SourceLink key={i} index={i + 1} source={s} />
           ))}
         </div>

@@ -24,7 +24,7 @@ export default function CreatorLibrary({
   }
 
   if (channels.length === 0) {
-    return null; // No library yet — just show search below
+    return null;
   }
 
   return (
@@ -37,22 +37,22 @@ export default function CreatorLibrary({
           <button
             key={c.channelId}
             onClick={() => onOpen(c)}
-            className="flex items-center gap-3 rounded-xl border border-border bg-panel p-3 text-left transition hover:border-accent"
+            className="flex items-center gap-2 rounded-lg border border-border bg-panel p-2 text-left transition hover:border-accent sm:gap-3 sm:p-3"
           >
             {c.thumbnail ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={c.thumbnail}
                 alt=""
-                className="h-12 w-12 rounded-full object-cover"
+                className="h-10 w-10 rounded-full object-cover sm:h-12 sm:w-12"
               />
             ) : (
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bg text-lg font-bold text-neutral-500">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-bg text-lg font-bold text-neutral-500 sm:h-12 sm:w-12">
                 {c.title.charAt(0)}
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <div className="truncate font-semibold">{c.title}</div>
+              <div className="truncate text-sm font-semibold sm:text-base">{c.title}</div>
               <div className="text-xs text-neutral-500">
                 {c.videoCount} Videos · {c.chunkCount} Chunks
               </div>

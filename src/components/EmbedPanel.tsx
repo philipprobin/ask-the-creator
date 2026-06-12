@@ -55,83 +55,84 @@ export default function EmbedPanel({
   }
 
   return (
-    <div className="rounded-xl border border-border bg-panel p-5">
+    <div className="mx-auto max-w-2xl rounded-none border-none bg-black p-4 sm:rounded-xl sm:border sm:border-border sm:bg-panel sm:p-5">
       <button onClick={onBack} className="mb-4 text-sm text-neutral-400 hover:text-white">
-        ← andere Suche
+        ← zurück
       </button>
 
       <div className="mb-5 flex items-center gap-3">
         {channel.thumbnail && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={channel.thumbnail} alt="" className="h-14 w-14 rounded-full object-cover" />
+          <img src={channel.thumbnail} alt="" className="h-12 w-12 rounded-full object-cover sm:h-14 sm:w-14" />
         )}
         <div>
-          <div className="text-lg font-semibold">{channel.title}</div>
-          <div className="text-sm text-neutral-500">
+          <div className="text-base font-semibold sm:text-lg">{channel.title}</div>
+          <div className="text-xs text-neutral-500 sm:text-sm">
             {channel.videoCount ? `${channel.videoCount} Videos` : ""}
           </div>
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         <label className="flex items-center justify-between">
-          <span>Nur Shorts</span>
+          <span className="text-sm sm:text-base">Nur Shorts</span>
           <input
             type="checkbox"
             checked={shortsOnly}
             onChange={(e) => setShortsOnly(e.target.checked)}
-            className="h-5 w-5 accent-accent"
+            className="h-4 w-4"
           />
         </label>
 
-        {!shortsOnly && (
-          <label className="flex items-center justify-between">
-            <span>Normale Videos einbeziehen</span>
-            <input
-              type="checkbox"
-              checked={includeVideos}
-              onChange={(e) => setIncludeVideos(e.target.checked)}
-              className="h-5 w-5 accent-accent"
-            />
-          </label>
-        )}
+        <label className="flex items-center justify-between">
+          <span className="text-sm sm:text-base">Videos includieren</span>
+          <input
+            type="checkbox"
+            checked={includeVideos}
+            onChange={(e) => setIncludeVideos(e.target.checked)}
+            className="h-4 w-4"
+          />
+        </label>
 
         <div>
-          <div className="mb-1 flex justify-between">
-            <span>Anzahl Videos</span>
-            <span className="text-neutral-400">{maxVideos}</span>
-          </div>
+          <label className="block text-sm sm:text-base">
+            Max Videos: {maxVideos}
+          </label>
           <input
             type="range"
-            min={1}
-            max={50}
+            min="1"
+            max="50"
             value={maxVideos}
-            onChange={(e) => setMaxVideos(parseInt(e.target.value, 10))}
-            className="w-full accent-accent"
+            onChange={(e) => setMaxVideos(parseInt(e.target.value))}
+            className="w-full"
           />
         </div>
 
-        <label className="flex items-center justify-between">
-          <span>Sortierung</span>
+        <div>
+          <label className="block text-sm sm:text-base">Sortierung</label>
           <select
             value={order}
             onChange={(e) => setOrder(e.target.value as "date" | "viewCount")}
-            className="rounded border border-border bg-bg px-2 py-1"
+            className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent sm:text-base"
           >
-            <option value="date">Neueste</option>
-            <option value="viewCount">Meiste Views</option>
+            <option value="date">Neueste zuerst</option>
+            <option value="viewCount">Meistgesehen zuerst</option>
           </select>
-        </label>
+        </div>
       </div>
 
-      {error && <p className="mt-4 text-sm text-accent">{error}</p>}
+      {error && (
+        <div className="mt-4 rounded-lg border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-400">
+          {error}
+        </div>
+      )}
 
       <button
         onClick={runEmbed}
         disabled={loading}
-        className="mt-6 w-full rounded-lg bg-accent py-3 font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+        className="mt-5 w-full rounded-lg bg-accent px-4 py-3 font-semibold text-white disabled:opacity-50 sm:mt-6"
       >
-        {loading ? "Embetten läuft… (kann etwas dauern)" : "Embetten"}
+        {loading ? "Embeddet…" : "Embedten"}
       </button>
     </div>
   );
