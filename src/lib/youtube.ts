@@ -80,7 +80,7 @@ export async function listVideos(channelId: string, filters: EmbedFilters): Prom
   const target = filters.maxVideos * 2 + 10;
 
   while (collected.length < target) {
-    const plUrl = `${API}/playlistItems?part=snippet,contentDetails&maxResults=50&playlistId=${uploads}${
+    const plUrl = `${API}/playlistItems?part=snippet,contentDetails&maxResults=1000&playlistId=${uploads}${
       pageToken ? `&pageToken=${pageToken}` : ""
     }&key=${config.youtubeKey}`;
     const plRes = await fetch(plUrl);

@@ -95,17 +95,22 @@ export default function EmbedPanel({
         </label>
 
         <div>
-          <label className="block text-sm sm:text-base">
-            Max Videos: {maxVideos}
+          <label className="block mb-2 text-sm sm:text-base">
+            Videos pro Run: <span className="font-semibold text-accent">{maxVideos}</span>
           </label>
           <input
             type="range"
-            min="1"
-            max="50"
+            min="10"
+            max="100"
+            step="10"
             value={maxVideos}
             onChange={(e) => setMaxVideos(parseInt(e.target.value))}
             className="w-full"
           />
+          <div className="mt-1 flex justify-between text-xs text-neutral-500">
+            <span>10</span>
+            <span>100</span>
+          </div>
         </div>
 
         <div>

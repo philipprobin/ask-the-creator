@@ -140,6 +140,7 @@ function VideoManager({
   const [videos, setVideos] = useState<EmbeddedVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [embedding, setEmbedding] = useState(false);
+  const [maxVideos, setMaxVideos] = useState(20);
   const [msg, setMsg] = useState("");
 
   function load() {
@@ -166,7 +167,7 @@ function VideoManager({
           channelId: channel.id,
           channelTitle: channel.title,
           channelThumbnail: channel.thumbnail,
-          maxVideos: 10,
+          maxVideos,
           order: "date",
         }),
       });
@@ -187,7 +188,7 @@ function VideoManager({
 
   return (
     <div className="border-b border-border bg-bg/50 px-3 py-3 sm:px-4 sm:py-4">
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between">
         <span className="text-xs font-semibold sm:text-sm">Videos ({videos.length})</span>
         <button onClick={onClose} className="text-xs text-neutral-400 hover:text-white">
           ✕
@@ -213,13 +214,28 @@ function VideoManager({
         </div>
       )}
 
+      <div className="mb-3 space-y-2">
+        <label className="block text-xs sm:text-sm">
+          Videos: <span className="font-semibold text-accent">{maxVideos}</span>
+        </label>
+        <input
+          type="range"
+          min="10"
+          max="100"
+          step="10"
+          value={maxVideos}
+          onChange={(e) => setMaxVideos(parseInt(e.target.value))}
+          className="w-full"
+        />
+      </div>
+
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <button
           onClick={embedMore}
           disabled={embedding}
           className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold disabled:opacity-50 sm:px-4 sm:text-sm"
         >
-          {embedding ? "…" : "+ Videos"}
+          {embedding ? "…" : `+ ${maxVideos} Videos`}
         </button>
         {msg && <span className="text-xs text-neutral-400 sm:text-sm">{msg}</span>}
       </div>
