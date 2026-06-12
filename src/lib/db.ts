@@ -9,9 +9,12 @@ function getPool(): Pool {
     if (!dbUrl) {
       throw new Error("DATABASE_URL not set");
     }
+    // Strip sslmode from URL to avoid conflict with ssl option below.
+    // We set SSL explicitly via the ssl option (Supabase uses self-signed certs).
+    const cleanUrl = dbUrl.replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]supa=[^&]*/g, "");
     pool = new Pool({
-      connectionString: dbUrl,
-      ssl: { rejectUnauthorized: false }, // Supabase/Neon require SSL
+      connectionString: cleanUrl,
+      ssl: { rejectUnauthorized: false }, // Supabase/Neon require SSL, self-signed
     });
   }
   return pool;
@@ -23,7 +26,7 @@ function getPool(): Pool {
 export async function saveChunks(channelId: string, chunks: Chunk[]): Promise<void> {
   const db = getPool();
   const client = await db.connect();
-  
+
   try {
     await client.query("BEGIN");
 
@@ -33,7 +36,7 @@ export async function saveChunks(channelId: string, chunks: Chunk[]): Promise<vo
     // Insert new chunks
     for (const chunk of chunks) {
       if (!chunk.embedding) continue;
-      
+
       await client.query(
         `INSERT INTO embeddings 
          (channel_id, video_id, video_title, chunk_text, chunk_start, embedding) 
@@ -91,9 +94,9 @@ export async function search(
   topK = 6
 ): Promise<RetrievedSource[]> {
   const db = getPool();
-  
+
   // pgvector cosine distance operator: <=>
-  // Lower distance = more similar (we negate to get similarity score)
+  // Lower distance = more similar (1 - distance = similarity score)
   const result = await db.query(
     `SELECT 
        video_id, 
