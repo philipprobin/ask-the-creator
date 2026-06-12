@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       batch.forEach((c, j) => (c.embedding = vectors[j]));
     }
 
-    saveChunks(channelId, allChunks);
+    await saveChunks(channelId, allChunks);
 
     return NextResponse.json({
       ok: true,
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       channelTitle,
       videosProcessed: videos.length,
       videosWithTranscript: withTranscript,
-      chunks: channelChunkCount(channelId),
+      chunks: await channelChunkCount(channelId),
     });
   } catch (e: any) {
     return NextResponse.json({ error: e.message || "embed failed" }, { status: 500 });

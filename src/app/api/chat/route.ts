@@ -16,7 +16,9 @@ export async function POST(req: NextRequest) {
     if (!channelId || !question) {
       return NextResponse.json({ error: "channelId and question required" }, { status: 400 });
     }
-    if (!hasChannel(channelId)) {
+    
+    const hasEmbeddings = await hasChannel(channelId);
+    if (!hasEmbeddings) {
       return NextResponse.json(
         { error: "channel not embedded yet — run embed first" },
         { status: 409 }
@@ -24,7 +26,7 @@ export async function POST(req: NextRequest) {
     }
 
     const [qVec] = await embed([question]);
-    const sources = search(channelId, qVec, 6);
+    const sources = await search(channelId, qVec, 6);
     const text = await answer(channelTitle, question, sources);
 
     return NextResponse.json({ answer: text, sources });
