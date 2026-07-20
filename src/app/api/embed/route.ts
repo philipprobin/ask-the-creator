@@ -14,10 +14,17 @@ import type { SaveMeta } from "@/lib/db";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+// Serverless functions are killed at `maxDuration`. We process videos until this
+// soft budget is hit, save what's done, and report `done:false` so the client
+// re-invokes to continue. Leaves headroom for the in-flight video + save.
+const BUDGET_MS = 40_000;
+const EMBED_BATCH = 64;
+
 /**
- * Lazy embed: transcribe + embed ONLY the videos the user selected on the
- * SourceSelect screen. Titles/thumbs come from the video_meta cache written by
- * /api/match. Incremental — already-embedded videos are skipped.
+ * Lazy, RESUMABLE embed. Transcribes + embeds ONLY the selected videos, saving
+ * each video's chunks immediately so partial progress survives a timeout. Sends
+ * the full selection every call; already-embedded videos are skipped, so the
+ * client can POST repeatedly until `done` to span multiple function invocations.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -31,74 +38,74 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "channelId and videoIds required" }, { status: 400 });
     }
 
+    const total = videoIds.length;
+
     // Titles/thumbnails from the meta index (source of truth for the picked videos).
     const metas = await getVideoMetaForIds(channelId, videoIds);
     const metaById = new Map(metas.map((m) => [m.videoId, m]));
 
-    // Incremental: skip videos already embedded for this channel.
+    // Resume point: which of the selection still need embedding.
     const alreadyEmbedded = await getEmbeddedVideoIds(channelId);
     const newIds = videoIds.filter((id) => !alreadyEmbedded.has(id));
+    let embeddedCount = total - newIds.length; // done in previous rounds
 
     if (newIds.length === 0) {
-      await setEmbedStatus(channelId, 0, 0, true);
+      await setEmbedStatus(channelId, total, total, true);
       return NextResponse.json({
-        ok: true,
-        channelId,
-        channelTitle,
-        videosProcessed: 0,
-        videosWithTranscript: 0,
-        newVideos: 0,
-        chunks: await channelChunkCount(channelId),
-        skipped: [],
-        message: "Alle ausgewählten Videos sind bereits embedded.",
+        ok: true, done: true, channelId, channelTitle,
+        embeddedCount: total, total, remaining: 0,
+        videosProcessed: total, videosWithTranscript: 0,
+        chunks: await channelChunkCount(channelId), skipped: [],
       });
     }
 
-    await setEmbedStatus(channelId, 0, newIds.length, false);
+    await setEmbedStatus(channelId, embeddedCount, total, false);
 
-    const allChunks: Chunk[] = [];
-    const processedVideos: SaveMeta["videos"] = [];
+    const start = Date.now();
     const skipped: { videoId: string; reason: string }[] = [];
     let withTranscript = 0;
 
-    for (let i = 0; i < newIds.length; i++) {
-      const id = newIds[i];
+    for (const id of newIds) {
+      // Stop before starting a new video if we're near the function limit;
+      // the client will re-invoke and resume from here.
+      if (Date.now() - start > BUDGET_MS) break;
+
       const title = metaById.get(id)?.title || id;
       const thumbnail = metaById.get(id)?.thumbnail;
-      processedVideos.push({ videoId: id, title, thumbnail });
 
       const segs = await fetchTranscript(id, title);
+      const videoMeta: SaveMeta["videos"] = [{ videoId: id, title, thumbnail }];
+
       if (!segs.length) {
         skipped.push({ videoId: id, reason: "no transcript" });
-        await setEmbedStatus(channelId, i + 1, newIds.length, false);
-        continue;
+        // Persist the (empty) video row so it counts as done and isn't retried.
+        await saveChunks(channelId, [], { channelTitle, channelThumbnail, videos: videoMeta });
+      } else {
+        withTranscript++;
+        const chunks: Chunk[] = chunkSegments(segs).map((p) => ({
+          videoId: id, videoTitle: title, text: p.text, start: p.start,
+        }));
+        for (let i = 0; i < chunks.length; i += EMBED_BATCH) {
+          const batch = chunks.slice(i, i + EMBED_BATCH);
+          const vectors = await embed(batch.map((c) => c.text));
+          batch.forEach((c, j) => (c.embedding = vectors[j]));
+        }
+        await saveChunks(channelId, chunks, { channelTitle, channelThumbnail, videos: videoMeta });
       }
-      withTranscript++;
-      for (const p of chunkSegments(segs)) {
-        allChunks.push({ videoId: id, videoTitle: title, text: p.text, start: p.start });
-      }
-      await setEmbedStatus(channelId, i + 1, newIds.length, false);
+
+      embeddedCount++;
+      await setEmbedStatus(channelId, embeddedCount, total, false);
     }
 
-    // Embed in batches
-    const batchSize = 64;
-    for (let i = 0; i < allChunks.length; i += batchSize) {
-      const batch = allChunks.slice(i, i + batchSize);
-      const vectors = await embed(batch.map((c) => c.text));
-      batch.forEach((c, j) => (c.embedding = vectors[j]));
-    }
-
-    const meta: SaveMeta = { channelTitle, channelThumbnail, videos: processedVideos };
-    await saveChunks(channelId, allChunks, meta);
-    await setEmbedStatus(channelId, newIds.length, newIds.length, true);
+    const remaining = total - embeddedCount;
+    const done = remaining === 0;
+    await setEmbedStatus(channelId, embeddedCount, total, done);
 
     return NextResponse.json({
-      ok: true,
-      channelId,
-      channelTitle,
-      videosProcessed: newIds.length,
+      ok: true, done, channelId, channelTitle,
+      embeddedCount, total, remaining,
+      videosProcessed: embeddedCount,
       videosWithTranscript: withTranscript,
-      newVideos: newIds.length,
       chunks: await channelChunkCount(channelId),
       skipped,
     });

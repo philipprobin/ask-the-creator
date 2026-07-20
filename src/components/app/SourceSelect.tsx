@@ -5,8 +5,10 @@ import { Avatar, Badge, Button, Checkbox, Spinner, Textarea, Icon } from "@/comp
 import { ytThumb } from "@/lib/media";
 import type { BuildResult } from "./types";
 
-const FREE_CREDITS = 60;
+const FREE_CREDITS = 180;
 const CREDIT_PER_SOURCE = 3;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function fmtDuration(iso?: string): string {
   if (!iso) return "";
@@ -121,27 +123,59 @@ export function SourceSelect({ creator, onBack, onBuilt }: {
     setProgressText("");
     try {
       const ids = [...sel];
-      const embedPromise = fetch("/api/embed", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channelId: creator.id, channelTitle: creator.title, channelThumbnail: creator.thumbnail, videoIds: ids }),
-      });
-      let done = false, polls = 0;
-      while (!done && polls < 240) {
-        await new Promise((r) => setTimeout(r, 500));
-        polls++;
-        try {
-          const s = await (await fetch(`/api/embed/status?channelId=${encodeURIComponent(creator.id)}`)).json();
-          if (s.total > 0) {
-            setProgress(Math.floor((s.processed / s.total) * 100));
-            setProgressText(`${s.processed}/${s.total}`);
-            done = s.done;
+      const total = ids.length;
+      const statusUrl = `/api/embed/status?channelId=${encodeURIComponent(creator.id)}`;
+      const allSkipped: { videoId: string; reason: string }[] = [];
+      let done = false, rounds = 0, lastEmbedded = -1, last: any = null;
+
+      // Each POST processes as many videos as fit in one serverless slot, saving
+      // per video. We re-invoke until `done`, so long selections span multiple
+      // function invocations instead of hitting the timeout.
+      while (!done && rounds < 60) {
+        rounds++;
+        let roundActive = true;
+        // Poll status concurrently for smooth within-round progress.
+        const pollLoop = (async () => {
+          while (roundActive) {
+            await sleep(800);
+            try {
+              const s = await (await fetch(statusUrl)).json();
+              if (s.total > 0) {
+                setProgress(Math.min(99, Math.floor((s.processed / s.total) * 100)));
+                setProgressText(`${s.processed}/${s.total}`);
+              }
+            } catch { /* keep polling */ }
           }
-        } catch { /* keep polling */ }
+        })();
+
+        try {
+          const res = await fetch("/api/embed", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ channelId: creator.id, channelTitle: creator.title, channelThumbnail: creator.thumbnail, videoIds: ids }),
+          });
+          last = await res.json();
+          if (!res.ok) throw new Error(last.error || "Embedding fehlgeschlagen");
+        } finally {
+          roundActive = false;
+          await pollLoop;
+        }
+
+        done = !!last.done;
+        const embedded = last.embeddedCount ?? 0;
+        setProgress(done ? 100 : Math.floor((embedded / total) * 100));
+        setProgressText(`${embedded}/${total}`);
+        if (Array.isArray(last.skipped)) allSkipped.push(...last.skipped);
+
+        // No-progress guard: a single video too large to finish within one slot
+        // would otherwise loop forever.
+        if (!done && embedded === lastEmbedded) {
+          throw new Error("Ein Video ist zu groß, um im Zeitlimit verarbeitet zu werden. Bitte wähle das längste Video ab und versuche es erneut.");
+        }
+        lastEmbedded = embedded;
       }
-      const res = await embedPromise;
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Embedding fehlgeschlagen");
-      onBuilt(question.trim(), data as BuildResult);
+
+      if (!done) throw new Error("Embedding hat das Rundenlimit erreicht. Bitte weniger Videos auswählen.");
+      onBuilt(question.trim(), { ...(last || {}), skipped: allSkipped } as BuildResult);
     } catch (e: any) {
       setError(e.message);
       setPhase("review");
