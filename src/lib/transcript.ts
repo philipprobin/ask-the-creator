@@ -6,13 +6,17 @@ import type { TranscriptSegment } from "./types";
  * Strategy:
  *  1. Try Supadata API (bypasses YouTube IP blocks)
  *  2. Fall back to scraping watch page + timedtext
- *  3. Fall back to mock (dev mode without keys)
+ *  3. If real sources exist but all fail/return nothing -> [] (caller skips the
+ *     video). Mock is used ONLY in pure dev mode with no transcript sources
+ *     configured — never as a production fallback, so a failed fetch can't
+ *     pollute the index with placeholder text.
  */
 export async function fetchTranscript(
   videoId: string,
   videoTitle: string
 ): Promise<TranscriptSegment[]> {
   const supadataKey = process.env.SUPADATA_API_KEY;
+  const hasRealSource = !!supadataKey || hasYouTube();
 
   // Try Supadata first if key is available
   if (supadataKey) {
@@ -40,7 +44,15 @@ export async function fetchTranscript(
     }
   }
 
-  // Dev mode fallback
+  // Real sources configured but none produced a transcript -> skip cleanly.
+  // (Never substitute mock content in production; that would pollute the index.)
+  if (hasRealSource) {
+    console.warn(`✗ No transcript available for ${videoId} (${videoTitle}) — skipping`);
+    return [];
+  }
+
+  // Pure dev mode: no transcript sources configured at all — mock so the app
+  // stays usable offline.
   console.log(`⚠ Using mock transcript for ${videoId} (${videoTitle})`);
   return mockTranscript(videoTitle);
 }
