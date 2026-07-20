@@ -2,6 +2,7 @@
 import React from "react";
 import type { Channel, ScoredVideo } from "@/lib/types";
 import { Avatar, Badge, Button, Checkbox, Spinner, Textarea, Icon } from "@/components/ds";
+import { ytThumb } from "@/lib/media";
 import type { BuildResult } from "./types";
 
 const FREE_CREDITS = 60;
@@ -24,18 +25,32 @@ function fmtViews(v?: string): string {
   return `${n} views`;
 }
 
-function Thumb({ source }: { source: "youtube" | "spotify" }) {
+function Thumb({ videoId, source, duration }: { videoId: string; source: "youtube" | "spotify"; duration?: string }) {
+  const [broken, setBroken] = React.useState(false);
   const yt = source !== "spotify";
+  const showImg = yt && !!videoId && !broken;
   return (
     <div style={{
-      width: 82, height: 50, flexShrink: 0, borderRadius: 8, position: "relative",
+      width: 104, height: 62, flexShrink: 0, borderRadius: 8, position: "relative",
       background: yt ? "linear-gradient(135deg,#3a4152,#0e1116)" : "linear-gradient(135deg,#1f38e0,#141f6e)",
       display: "grid", placeItems: "center", overflow: "hidden",
     }}>
-      <Icon name={yt ? "play" : "mic"} size={18} color="rgba(255,255,255,.92)" />
-      <span style={{ position: "absolute", bottom: 4, right: 5 }}>
-        <Icon name={yt ? "youtube" : "audio-lines"} size={13} color="rgba(255,255,255,.75)" />
+      {showImg ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={ytThumb(videoId)} alt="" onError={() => setBroken(true)}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+      ) : (
+        <Icon name={yt ? "play" : "mic"} size={18} color="rgba(255,255,255,.92)" />
+      )}
+      <span style={{ position: "absolute", top: 4, left: 5, filter: "drop-shadow(0 1px 2px rgba(0,0,0,.6))" }}>
+        <Icon name={yt ? "youtube" : "audio-lines"} size={13} color="#fff" />
       </span>
+      {duration && (
+        <span style={{
+          position: "absolute", bottom: 4, right: 5, background: "rgba(0,0,0,.8)", color: "#fff",
+          fontFamily: "var(--font-mono)", fontSize: 10, lineHeight: 1.4, padding: "1px 4px", borderRadius: 4,
+        }}>{duration}</span>
+      )}
     </div>
   );
 }
@@ -141,7 +156,7 @@ export function SourceSelect({ creator, onBack, onBuilt }: {
         <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 28px 60px" }}>
           <button onClick={onBack} style={backBtn}><Icon name="arrow-left" size={15} /> Back to creators</button>
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 8, marginBottom: 26 }}>
-            <Avatar name={creator.title} src={creator.thumbnail} size="lg" />
+            <Avatar name={creator.title} src={creator.thumbnail} size="lg" ring />
             <div>
               <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-strong)", letterSpacing: "-.01em" }}>{creator.title}</h1>
               <div style={{ fontSize: 13.5, color: "var(--text-muted)" }}>Answers grounded in this creator&apos;s YouTube videos</div>
@@ -188,7 +203,9 @@ export function SourceSelect({ creator, onBack, onBuilt }: {
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {matches.map((s) => {
             const on = sel.has(s.videoId);
-            const meta = [fmtDuration(s.duration), fmtViews(s.viewCount)].filter(Boolean).join(" · ");
+            const dur = fmtDuration(s.duration);
+            const meta = fmtViews(s.viewCount);
+            const scoreTone = s.score >= 85 ? "success" : s.score >= 65 ? "brand" : s.score >= 45 ? "warning" : "neutral";
             return (
               <div key={s.videoId} onClick={() => !building && toggle(s.videoId)} style={{
                 display: "flex", alignItems: "center", gap: 14, padding: 12, cursor: building ? "default" : "pointer",
@@ -198,14 +215,14 @@ export function SourceSelect({ creator, onBack, onBuilt }: {
                 transition: "border-color .12s, box-shadow .12s, opacity .12s",
               }}>
                 <Checkbox checked={on} onChange={() => toggle(s.videoId)} />
-                <Thumb source={s.source} />
+                <Thumb videoId={s.videoId} source={s.source} duration={dur} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{s.title}</div>
                   {meta && <div style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--text-muted)", marginTop: 3 }}>{meta}</div>}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-subtle)" }}>{CREDIT_PER_SOURCE} cr</span>
-                  <Badge tone={s.score >= 80 ? "brand" : "neutral"}>{s.score}%</Badge>
+                  <Badge tone={scoreTone}>{s.score}%</Badge>
                 </div>
               </div>
             );

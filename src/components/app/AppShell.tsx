@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Avatar, Badge, Button, Icon } from "@/components/ds";
+import { Avatar, Badge, Button, Icon, accentFor } from "@/components/ds";
 
 export function Logo({ size = 22, onClick }: { size?: number; onClick?: () => void }) {
   return (
@@ -19,7 +19,7 @@ export function Logo({ size = 22, onClick }: { size?: number; onClick?: () => vo
   );
 }
 
-function NavItem({ icon, label, active, onClick }: { icon: string; label: string; active?: boolean; onClick?: () => void }) {
+function NavItem({ label, active, dotColor, onClick }: { label: string; active?: boolean; dotColor?: string; onClick?: () => void }) {
   const [hover, setHover] = React.useState(false);
   return (
     <button onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
@@ -31,7 +31,7 @@ function NavItem({ icon, label, active, onClick }: { icon: string; label: string
         background: active ? "var(--blue-50)" : hover ? "var(--surface-sunken)" : "transparent",
         transition: "background .12s",
       }}>
-      <Icon name={icon} size={17} />
+      <span style={{ width: 9, height: 9, borderRadius: "50%", flexShrink: 0, background: dotColor || "var(--gray-400)", boxShadow: active ? `0 0 0 3px ${dotColor}22` : undefined }} />
       <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
     </button>
   );
@@ -61,7 +61,7 @@ export function AppShell({
         <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, overflowY: "auto" }}>
           {recents.length === 0 && <div style={{ padding: "0 12px", fontSize: 12.5, color: "var(--text-subtle)" }}>None yet</div>}
           {recents.map((r) => (
-            <NavItem key={r.id} icon="message-circle" label={r.title} active={activeId === r.id} onClick={() => onSelectRecent?.(r.id)} />
+            <NavItem key={r.id} label={r.title} active={activeId === r.id} dotColor={accentFor(r.title).solid} onClick={() => onSelectRecent?.(r.id)} />
           ))}
         </div>
         <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 12, marginTop: 8 }}>

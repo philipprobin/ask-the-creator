@@ -45,6 +45,23 @@
   --red-500:   #e5484d;
   --red-100:   #ffe0e1;
 
+  /* Extra accent hues — for per-creator color & lively surfaces */
+  --violet-500: #7c3aed;
+  --violet-100: #f3e8ff;
+  --teal-500:   #0d9488;
+  --teal-100:   #ccfbf1;
+  --pink-500:   #db2777;
+  --pink-100:   #fce7f3;
+  --cyan-500:   #0891b2;
+  --cyan-100:   #cffafe;
+
+  /* ═══ Gradients ═══ */
+  --grad-hero:  linear-gradient(103deg, var(--blue-600) 0%, var(--violet-500) 44%, var(--coral-500) 100%);
+  --grad-brand: linear-gradient(135deg, var(--blue-500), var(--violet-500));
+  --grad-accent: linear-gradient(135deg, var(--coral-500), var(--pink-500));
+  --grad-page-tint: radial-gradient(1200px 520px at 85% -8%, rgba(124,58,237,.07), transparent 60%),
+                    radial-gradient(1000px 480px at 5% -12%, rgba(47,75,255,.07), transparent 55%);
+
   /* ═══ Semantic aliases ═══ */
   --color-primary: var(--blue-500);
   --color-primary-hover: var(--blue-600);

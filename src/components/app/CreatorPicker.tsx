@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import type { Channel, EmbeddedChannel } from "@/lib/types";
-import { Card, Avatar, Badge, Input, Spinner, Icon } from "@/components/ds";
+import { Card, Avatar, Badge, Input, Spinner, Icon, accentFor } from "@/components/ds";
 
 function SourceDots() {
   // YouTube wired now; Spotify is a structural (disabled) slot.
@@ -16,10 +16,13 @@ function SourceDots() {
 function CreatorCard({ title, handle, subtitle, thumbnail, onClick }: {
   title: string; handle?: string; subtitle?: string; thumbnail?: string; onClick: () => void;
 }) {
+  const accent = accentFor(title);
   return (
-    <Card interactive padding="md" onClick={onClick}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-        <Avatar name={title} src={thumbnail} size="lg" />
+    <Card interactive padding="md" onClick={onClick} style={{ position: "relative", overflow: "hidden" }}>
+      {/* colored accent strip — a stable hue per creator */}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, background: accent.grad }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, marginTop: 2 }}>
+        <Avatar name={title} src={thumbnail} size="lg" ring />
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-strong)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
           {handle && <div style={{ fontSize: 12.5, color: "var(--text-muted)" }}>{handle}</div>}
@@ -60,10 +63,14 @@ export function CreatorPicker({ onPick }: { onPick: (c: Channel) => void }) {
   const showLibrary = q.trim().length < 2 && library.length > 0;
 
   return (
-    <div style={{ flex: 1, overflowY: "auto" }}>
+    <div style={{ flex: 1, overflowY: "auto", background: "var(--grad-page-tint)" }}>
       <div style={{ maxWidth: 880, margin: "0 auto", padding: "56px 28px 40px" }}>
         <div style={{ textAlign: "center", marginBottom: 34 }}>
-          <h1 style={{ fontFamily: "var(--font-display)", fontSize: 52, color: "var(--text-strong)", letterSpacing: "-.02em", lineHeight: 1.02 }}>
+          <h1 style={{
+            fontFamily: "var(--font-display)", fontSize: 52, letterSpacing: "-.02em", lineHeight: 1.02,
+            background: "var(--grad-hero)", WebkitBackgroundClip: "text", backgroundClip: "text",
+            color: "transparent", display: "inline-block",
+          }}>
             Who do you want to<br />ask today?
           </h1>
           <p style={{ fontSize: 16, color: "var(--text-muted)", marginTop: 14 }}>

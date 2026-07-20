@@ -1,7 +1,8 @@
 "use client";
 import React from "react";
 import type { Channel, ChatTurn, RetrievedSource } from "@/lib/types";
-import { Avatar, Badge, IconButton, Textarea, Spinner, Icon } from "@/components/ds";
+import { Avatar, Badge, IconButton, Textarea, Spinner, Icon, accentFor } from "@/components/ds";
+import { ytThumb } from "@/lib/media";
 
 function fmtTime(s: number): string {
   const m = Math.floor(s / 60);
@@ -10,16 +11,32 @@ function fmtTime(s: number): string {
 }
 
 function SourceChip({ s, i }: { s: RetrievedSource; i: number }) {
+  const [broken, setBroken] = React.useState(false);
   const t = Math.floor(s.start);
   const url = `https://www.youtube.com/watch?v=${s.videoId}&t=${t}s`;
+  const accent = accentFor(s.videoId);
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" style={{
-      display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 11px 6px 8px",
-      background: "var(--surface-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-pill)", textDecoration: "none",
+      display: "inline-flex", alignItems: "center", gap: 9, padding: "5px 12px 5px 5px",
+      background: "var(--surface-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-pill)",
+      textDecoration: "none", boxShadow: "var(--shadow-sm)",
     }}>
-      <span style={{ width: 18, height: 18, borderRadius: "50%", background: "var(--blue-500)", color: "#fff", fontSize: 10, fontWeight: 700, display: "grid", placeItems: "center", fontFamily: "var(--font-mono)" }}>{i}</span>
-      <Icon name="youtube" size={13} color="#e5484d" />
-      <span style={{ fontSize: 12.5, color: "var(--text-body)", maxWidth: 220, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.videoTitle}</span>
+      {/* video thumbnail with a colored source-number badge */}
+      <span style={{ position: "relative", width: 46, height: 28, borderRadius: 6, overflow: "hidden", flexShrink: 0, background: accent.grad, display: "grid", placeItems: "center" }}>
+        {!broken ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={ytThumb(s.videoId)} alt="" onError={() => setBroken(true)}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <Icon name="play" size={12} color="#fff" />
+        )}
+        <span style={{
+          position: "absolute", bottom: 2, left: 2, width: 15, height: 15, borderRadius: "50%",
+          background: accent.solid, color: "#fff", fontSize: 9, fontWeight: 700, display: "grid",
+          placeItems: "center", fontFamily: "var(--font-mono)", boxShadow: "0 0 0 1.5px #fff",
+        }}>{i}</span>
+      </span>
+      <span style={{ fontSize: 12.5, color: "var(--text-body)", maxWidth: 200, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.videoTitle}</span>
       <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-subtle)" }}>{fmtTime(t)}</span>
     </a>
   );
@@ -36,7 +53,7 @@ function QuestionBubble({ text }: { text: string }) {
 function AnswerBubble({ creator, turn, streaming }: { creator: Channel; turn?: ChatTurn; streaming?: boolean }) {
   return (
     <div style={{ display: "flex", gap: 12, marginBottom: 28 }}>
-      <Avatar name={creator.title} src={creator.thumbnail} size="md" style={{ marginTop: 2 }} />
+      <Avatar name={creator.title} src={creator.thumbnail} size="md" ring style={{ marginTop: 2 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-strong)" }}>{creator.title}</span>
@@ -119,7 +136,7 @@ export function ChatView({ creator, initialQuestion }: { creator: Channel; initi
         <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 28px 20px" }}>
           {empty ? (
             <div style={{ textAlign: "center", paddingTop: 40 }}>
-              <Avatar name={creator.title} src={creator.thumbnail} size="xl" style={{ margin: "0 auto" }} />
+              <Avatar name={creator.title} src={creator.thumbnail} size="xl" ring style={{ margin: "0 auto" }} />
               <h1 style={{ fontFamily: "var(--font-display)", fontSize: 34, color: "var(--text-strong)", marginTop: 18, letterSpacing: "-.01em" }}>Ask {creator.title}</h1>
               <p style={{ fontSize: 14.5, color: "var(--text-muted)", marginTop: 8 }}>Answers are generated only from the sources you selected.</p>
             </div>
