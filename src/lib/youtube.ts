@@ -23,14 +23,16 @@ const MOCK_CHANNELS: Channel[] = [
   },
 ];
 
-function mockVideos(channelId: string, filters: EmbedFilters): VideoMeta[] {
-  const n = Math.min(filters.maxVideos, 8);
+function mockVideos(channelId: string, count: number, shortsOnly = false): VideoMeta[] {
+  const n = Math.min(count, 12);
   return Array.from({ length: n }).map((_, i) => ({
     id: `${channelId}-vid-${i}`,
-    title: `${filters.shortsOnly ? "Short" : "Video"} #${i + 1} (mock transcript)`,
+    title: `${shortsOnly ? "Short" : "Video"} #${i + 1} (mock transcript)`,
+    description: `Mock description for ${shortsOnly ? "short" : "video"} #${i + 1}. Set YOUTUBE_API_KEY for real data.`,
     publishedAt: new Date(Date.now() - i * 86400000).toISOString(),
     thumbnail: "https://i.ytimg.com/vi/default.jpg",
-    isShort: filters.shortsOnly,
+    viewCount: `${(n - i) * 100000}`,
+    isShort: shortsOnly,
   }));
 }
 
@@ -65,7 +67,7 @@ export async function searchChannels(query: string): Promise<Channel[]> {
 }
 
 export async function listVideos(channelId: string, filters: EmbedFilters): Promise<VideoMeta[]> {
-  if (!hasYouTube()) return mockVideos(channelId, filters);
+  if (!hasYouTube()) return mockVideos(channelId, filters.maxVideos, filters.shortsOnly);
 
   // Resolve uploads playlist
   const chUrl = `${API}/channels?part=contentDetails&id=${channelId}&key=${config.youtubeKey}`;
@@ -80,7 +82,7 @@ export async function listVideos(channelId: string, filters: EmbedFilters): Prom
   const target = filters.maxVideos * 2 + 10;
 
   while (collected.length < target) {
-    const plUrl = `${API}/playlistItems?part=snippet,contentDetails&maxResults=1000&playlistId=${uploads}${
+    const plUrl = `${API}/playlistItems?part=contentDetails&maxResults=50&playlistId=${uploads}${
       pageToken ? `&pageToken=${pageToken}` : ""
     }&key=${config.youtubeKey}`;
     const plRes = await fetch(plUrl);
@@ -90,7 +92,7 @@ export async function listVideos(channelId: string, filters: EmbedFilters): Prom
     const ids = items.map((it: any) => it.contentDetails.videoId).join(",");
     if (!ids) break;
 
-    const vUrl = `${API}/videos?part=snippet,contentDetails&id=${ids}&key=${config.youtubeKey}`;
+    const vUrl = `${API}/videos?part=snippet,contentDetails,statistics&id=${ids}&key=${config.youtubeKey}`;
     const vRes = await fetch(vUrl);
     const vData = await vRes.json();
     for (const v of vData.items || []) {
@@ -99,9 +101,11 @@ export async function listVideos(channelId: string, filters: EmbedFilters): Prom
       collected.push({
         id: v.id,
         title: v.snippet.title,
+        description: v.snippet.description || "",
         publishedAt: v.snippet.publishedAt,
         thumbnail: v.snippet.thumbnails?.medium?.url || v.snippet.thumbnails?.default?.url || "",
         duration: v.contentDetails?.duration,
+        viewCount: v.statistics?.viewCount,
         isShort,
       });
     }
@@ -113,6 +117,55 @@ export async function listVideos(channelId: string, filters: EmbedFilters): Prom
     filters.shortsOnly ? v.isShort : filters.includeVideos || v.isShort
   );
   return filtered.slice(0, filters.maxVideos);
+}
+
+/**
+ * Fetch metadata (title + description + stats) for up to `cap` of a channel's
+ * newest uploads — used to build the question→video relevance index. No shorts/
+ * videos filtering here; scoring ranks the whole recent library.
+ */
+export async function listChannelVideoMeta(channelId: string, cap = 200): Promise<VideoMeta[]> {
+  if (!hasYouTube()) return mockVideos(channelId, cap);
+
+  const chUrl = `${API}/channels?part=contentDetails&id=${channelId}&key=${config.youtubeKey}`;
+  const chRes = await fetch(chUrl);
+  const chData = await chRes.json();
+  const uploads = chData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+  if (!uploads) return [];
+
+  const out: VideoMeta[] = [];
+  let pageToken = "";
+  while (out.length < cap) {
+    const plUrl = `${API}/playlistItems?part=contentDetails&maxResults=50&playlistId=${uploads}${
+      pageToken ? `&pageToken=${pageToken}` : ""
+    }&key=${config.youtubeKey}`;
+    const plRes = await fetch(plUrl);
+    if (!plRes.ok) break;
+    const plData = await plRes.json();
+    const ids = (plData.items || []).map((it: any) => it.contentDetails.videoId).join(",");
+    if (!ids) break;
+
+    const vUrl = `${API}/videos?part=snippet,contentDetails,statistics&id=${ids}&key=${config.youtubeKey}`;
+    const vRes = await fetch(vUrl);
+    const vData = await vRes.json();
+    for (const v of vData.items || []) {
+      const seconds = parseISODuration(v.contentDetails?.duration || "");
+      out.push({
+        id: v.id,
+        title: v.snippet.title,
+        description: v.snippet.description || "",
+        publishedAt: v.snippet.publishedAt,
+        thumbnail: v.snippet.thumbnails?.medium?.url || v.snippet.thumbnails?.default?.url || "",
+        duration: v.contentDetails?.duration,
+        viewCount: v.statistics?.viewCount,
+        isShort: seconds > 0 && seconds <= 60,
+      });
+      if (out.length >= cap) break;
+    }
+    pageToken = plData.nextPageToken;
+    if (!pageToken) break;
+  }
+  return out;
 }
 
 export function parseISODuration(iso: string): number {

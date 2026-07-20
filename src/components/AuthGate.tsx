@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Card, Input, Button, Icon } from "@/components/ds";
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [password, setPassword] = useState("");
@@ -43,49 +44,38 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
 
   if (checking) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-neutral-500">Prüfe Zugriff...</div>
+      <div style={{ display: "flex", minHeight: "100dvh", alignItems: "center", justifyContent: "center", background: "var(--surface-page)", color: "var(--text-muted)", fontFamily: "var(--font-sans)", fontSize: 14 }}>
+        Prüfe Zugriff…
       </div>
     );
   }
 
   if (!isAuthed) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <div className="w-full max-w-sm">
-          <div className="mb-6 text-center">
-            <h1 className="text-2xl font-bold">
-              ask<span className="text-accent">-the-</span>creator
-            </h1>
-            <p className="mt-2 text-sm text-neutral-500">
-              Passwort erforderlich
-            </p>
+      <div style={{ display: "flex", minHeight: "100dvh", alignItems: "center", justifyContent: "center", padding: 20, background: "var(--surface-page)", fontFamily: "var(--font-sans)" }}>
+        <Card padding="lg" style={{ width: "100%", maxWidth: 380 }}>
+          <div style={{ textAlign: "center", marginBottom: 22 }}>
+            <span style={{ width: 44, height: 44, borderRadius: 11, background: "var(--color-primary)", color: "#fff", display: "inline-grid", placeItems: "center", boxShadow: "var(--shadow-sm)", marginBottom: 14 }}>
+              <Icon name="sparkles" size={22} />
+            </span>
+            <h1 style={{ fontFamily: "var(--font-display)", fontSize: 26, color: "var(--text-strong)", letterSpacing: "-.01em" }}>Ask the Creator</h1>
+            <p style={{ marginTop: 8, fontSize: 14, color: "var(--text-muted)" }}>Passwort erforderlich</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Passwort eingeben"
-                className="w-full rounded border border-neutral-300 px-4 py-2 focus:border-accent focus:outline-none"
-                autoFocus
-              />
-            </div>
-
-            {error && (
-              <div className="text-sm text-red-600">{error}</div>
-            )}
-
-            <button
-              type="submit"
-              className="w-full rounded bg-accent px-4 py-2 font-medium text-white hover:bg-accent/90"
-            >
-              Anmelden
-            </button>
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Passwort eingeben"
+              size="lg"
+              autoFocus
+              invalid={!!error}
+            />
+            {error && <div style={{ fontSize: 13, color: "var(--color-danger)" }}>{error}</div>}
+            <Button type="submit" variant="primary" size="lg" fullWidth>Anmelden</Button>
           </form>
-        </div>
+        </Card>
       </div>
     );
   }

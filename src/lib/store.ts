@@ -4,10 +4,11 @@ import type {
   EmbeddedChannel,
   EmbeddedVideo,
   ChatTurn,
+  ScoredVideo,
 } from "./types";
 import { cosine } from "./embeddings";
 import { hasDatabase } from "./config";
-import type { SaveMeta } from "./db";
+import type { SaveMeta, VideoMetaInput } from "./db";
 
 /**
  * Unified store: Postgres (pgvector) when DATABASE_URL is set, else in-memory.
@@ -17,6 +18,7 @@ import type { SaveMeta } from "./db";
 const memChunks = new Map<string, Chunk[]>();
 const memMeta = new Map<string, SaveMeta>();
 const memChats = new Map<string, ChatTurn[]>();
+const memVideoMeta = new Map<string, VideoMetaInput[]>();
 
 export async function saveChunks(
   channelId: string,
@@ -145,4 +147,78 @@ export async function getChatHistory(channelId: string): Promise<ChatTurn[]> {
     return db.getChatHistory(channelId);
   }
   return memChats.get(channelId) || [];
+}
+
+// ── video_meta (question→video relevance index) ──
+
+export async function getMetaVideoIds(channelId: string): Promise<Set<string>> {
+  if (hasDatabase()) {
+    const db = await import("./db");
+    return db.getMetaVideoIds(channelId);
+  }
+  return new Set((memVideoMeta.get(channelId) || []).map((v) => v.id));
+}
+
+export async function isChannelMetaIndexed(channelId: string): Promise<boolean> {
+  if (hasDatabase()) {
+    const db = await import("./db");
+    return db.isChannelMetaIndexed(channelId);
+  }
+  return (memVideoMeta.get(channelId)?.length ?? 0) > 0;
+}
+
+export async function saveVideoMeta(
+  channelId: string,
+  meta: { channelTitle: string; channelThumbnail?: string },
+  rows: VideoMetaInput[]
+): Promise<void> {
+  if (hasDatabase()) {
+    const db = await import("./db");
+    return db.saveVideoMeta(channelId, meta, rows);
+  }
+  const existing = memVideoMeta.get(channelId) || [];
+  const byId = new Map(existing.map((v) => [v.id, v]));
+  for (const r of rows) byId.set(r.id, r);
+  memVideoMeta.set(channelId, [...byId.values()]);
+}
+
+export async function scoreVideos(
+  channelId: string,
+  queryEmbedding: number[],
+  limit = 200
+): Promise<ScoredVideo[]> {
+  if (hasDatabase()) {
+    const db = await import("./db");
+    return db.scoreVideos(channelId, queryEmbedding, limit);
+  }
+  const rows = memVideoMeta.get(channelId) || [];
+  return rows
+    .map((v) => ({
+      videoId: v.id,
+      source: "youtube" as const,
+      title: v.title,
+      description: v.description,
+      thumbnail: v.thumbnail,
+      duration: v.duration,
+      publishedAt: v.publishedAt,
+      viewCount: v.viewCount,
+      isShort: v.isShort,
+      score: Math.max(0, Math.min(100, Math.round(cosine(queryEmbedding, v.embedding) * 100))),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
+
+export async function getVideoMetaForIds(
+  channelId: string,
+  ids: string[]
+): Promise<{ videoId: string; title: string; thumbnail?: string }[]> {
+  if (hasDatabase()) {
+    const db = await import("./db");
+    return db.getVideoMetaForIds(channelId, ids);
+  }
+  const idSet = new Set(ids);
+  return (memVideoMeta.get(channelId) || [])
+    .filter((v) => idSet.has(v.id))
+    .map((v) => ({ videoId: v.id, title: v.title, thumbnail: v.thumbnail }));
 }

@@ -13,7 +13,23 @@ export interface VideoMeta {
   publishedAt: string;
   thumbnail: string;
   duration?: string;
+  description?: string;
+  viewCount?: string;
   isShort: boolean;
+}
+
+/** A video ranked against a question (title+description cosine), for the SourceSelect screen. */
+export interface ScoredVideo {
+  videoId: string;
+  source: "youtube" | "spotify";
+  title: string;
+  description?: string;
+  thumbnail?: string;
+  duration?: string;
+  publishedAt?: string;
+  viewCount?: string;
+  isShort: boolean;
+  score: number; // 0–100
 }
 
 export interface TranscriptSegment {

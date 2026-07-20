@@ -2,8 +2,9 @@ import { config, hasOpenAI } from "./config";
 
 const OPENAI = "https://api.openai.com/v1";
 
-/** Deterministic cheap fallback embedding (hashing) so mock mode still "retrieves". */
-function mockEmbed(text: string, dim = 256): number[] {
+/** Deterministic cheap fallback embedding (hashing) so mock mode still "retrieves".
+ *  dim matches the pgvector column (1536) so mock vectors are DB-insertable too. */
+function mockEmbed(text: string, dim = 1536): number[] {
   const v = new Array(dim).fill(0);
   const tokens = text.toLowerCase().match(/[a-z0-9]+/g) || [];
   for (const tok of tokens) {

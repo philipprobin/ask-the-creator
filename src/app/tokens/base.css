@@ -1,0 +1,23 @@
+/* Minimal element defaults consuming projects inherit. */
+:root {
+  color-scheme: light;
+  --focus-ring: var(--shadow-focus);
+}
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--lh-normal);
+  color: var(--text-body);
+  background: var(--surface-page);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1,h2,h3,h4 { color: var(--text-strong); font-weight: var(--fw-bold); line-height: var(--lh-snug); margin: 0; }
+a { color: var(--text-link); text-decoration: none; }
+a:hover { color: var(--color-primary-active); text-decoration: underline; }
+*,*::before,*::after { box-sizing: border-box; }
+::selection { background: var(--blue-200); }
+@keyframes atc-spin { to { transform: rotate(360deg); } }
+@keyframes atc-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes atc-pop-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }

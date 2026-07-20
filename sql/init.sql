@@ -37,6 +37,30 @@ CREATE TABLE IF NOT EXISTS videos (
   PRIMARY KEY (channel_id, video_id)
 );
 
+-- Question→video relevance index: one embedding per video of (title + description).
+CREATE TABLE IF NOT EXISTS video_meta (
+  channel_id   TEXT NOT NULL,
+  video_id     TEXT NOT NULL,
+  source       TEXT NOT NULL DEFAULT 'youtube',   -- 'youtube' | 'spotify' (spotify unwired)
+  title        TEXT NOT NULL,
+  description  TEXT DEFAULT '',
+  thumbnail    TEXT,
+  duration     TEXT,                               -- ISO 8601
+  published_at TIMESTAMPTZ,
+  view_count   BIGINT,
+  is_short     BOOLEAN DEFAULT FALSE,
+  embedding    vector(1536) NOT NULL,              -- embed(title + "\n" + description)
+  indexed_at   TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (channel_id, video_id)
+);
+CREATE INDEX IF NOT EXISTS idx_video_meta_channel ON video_meta(channel_id);
+CREATE INDEX IF NOT EXISTS idx_video_meta_vec ON video_meta
+  USING hnsw (embedding vector_cosine_ops);
+
+-- Channel-level marker so metadata isn't re-scanned/re-embedded per question.
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS meta_indexed_at  TIMESTAMPTZ;
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS meta_video_count INT DEFAULT 0;
+
 -- Chat history per channel
 CREATE TABLE IF NOT EXISTS chats (
   id SERIAL PRIMARY KEY,

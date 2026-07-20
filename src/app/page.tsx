@@ -1,103 +1,61 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { Channel, EmbeddedChannel } from "@/lib/types";
-import ChannelSearch from "@/components/ChannelSearch";
-import EmbedPanel, { type EmbedResult } from "@/components/EmbedPanel";
-import Chat from "@/components/Chat";
-import CreatorLibrary from "@/components/CreatorLibrary";
+import { AppShell, TopBar } from "@/components/app/AppShell";
+import { CreatorPicker } from "@/components/app/CreatorPicker";
+import { SourceSelect } from "@/components/app/SourceSelect";
+import { ChatView } from "@/components/app/ChatView";
+import { Badge } from "@/components/ds";
+import type { BuildResult } from "@/components/app/types";
 
-type Stage = "home" | "embed" | "chat";
+type Stage = "pick" | "source" | "chat";
 
 export default function Home() {
-  const [stage, setStage] = useState<Stage>("home");
-  const [channel, setChannel] = useState<Channel | null>(null);
-  const [result, setResult] = useState<EmbedResult | null>(null);
+  const [stage, setStage] = useState<Stage>("pick");
+  const [creator, setCreator] = useState<Channel | null>(null);
+  const [question, setQuestion] = useState<string>("");
+  const [library, setLibrary] = useState<EmbeddedChannel[]>([]);
 
-  function openCreator(c: EmbeddedChannel) {
-    setChannel({
-      id: c.channelId,
-      title: c.title,
-      description: "",
-      thumbnail: c.thumbnail || "",
-    });
-    // Go to embed screen first (to allow re-embedding or viewing the embed panel)
-    setStage("embed");
-  }
+  const refreshLibrary = useCallback(() => {
+    fetch("/api/channels").then((r) => r.json()).then((d) => setLibrary(d.channels || [])).catch(() => {});
+  }, []);
+  useEffect(() => { refreshLibrary(); }, [refreshLibrary]);
 
-  function openChat(c: EmbeddedChannel) {
-    setChannel({
-      id: c.channelId,
-      title: c.title,
-      description: "",
-      thumbnail: c.thumbnail || "",
-    });
-    setResult({
-      channelId: c.channelId,
-      channelTitle: c.title,
-      videosProcessed: c.videoCount,
-      videosWithTranscript: c.videoCount,
-      chunks: c.chunkCount,
-    });
+  const home = () => { setStage("pick"); setCreator(null); setQuestion(""); refreshLibrary(); };
+  const pick = (c: Channel) => { setCreator(c); setQuestion(""); setStage("source"); };
+  const built = (q: string) => { setQuestion(q); setStage("chat"); refreshLibrary(); };
+  const openRecent = (id: string) => {
+    const c = library.find((x) => x.channelId === id);
+    if (!c) return;
+    setCreator({ id: c.channelId, title: c.title, description: "", thumbnail: c.thumbnail || "" });
+    setQuestion("");
     setStage("chat");
+  };
+
+  let body: React.ReactNode, title = "Discover", subtitle: string | undefined, right: React.ReactNode = null;
+  if (stage === "pick") {
+    title = "Discover"; subtitle = "Choose a creator to ask";
+    body = <CreatorPicker onPick={pick} />;
+  } else if (stage === "source" && creator) {
+    title = "Set up sources"; subtitle = creator.title;
+    body = <SourceSelect creator={creator} onBack={home} onBuilt={built} />;
+  } else if (stage === "chat" && creator) {
+    title = creator.title; subtitle = "Answering from selected sources";
+    right = <Badge tone="success" dot>Index ready</Badge>;
+    body = <ChatView creator={creator} initialQuestion={question || undefined} />;
   }
 
   return (
-    <main className="flex min-h-screen flex-col bg-black">
-      <header className="border-b border-border bg-bg px-4 py-6 sm:px-6">
-        <h1 className="text-2xl font-bold sm:text-3xl">
-          ask<span className="text-accent">-the-</span>creator
-        </h1>
-        <p className="mt-1 text-sm text-neutral-500 sm:text-base">
-          Chatte mit jedem YouTuber – auf Basis seiner eigenen Video-Transkripte.
-        </p>
-      </header>
-
-      <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
-        {stage === "home" && (
-          <div className="mx-auto max-w-2xl space-y-8">
-            <CreatorLibrary onOpen={openCreator} onChat={openChat} />
-            <div>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500">
-                Neuen Creator hinzufügen
-              </h2>
-              <ChannelSearch
-                onSelect={(c) => {
-                  setChannel(c);
-                  setStage("embed");
-                }}
-              />
-            </div>
-          </div>
-        )}
-
-        {stage === "embed" && channel && (
-          <EmbedPanel
-            channel={channel}
-            onBack={() => setStage("home")}
-            onEmbedded={(r) => {
-              setResult(r);
-              setStage("chat");
-            }}
-          />
-        )}
-
-        {stage === "chat" && channel && result && (
-          <Chat
-            channel={channel}
-            result={result}
-            onReset={() => {
-              setStage("home");
-              setChannel(null);
-              setResult(null);
-            }}
-          />
-        )}
-      </div>
-
-      <footer className="border-t border-border bg-bg px-4 py-3 text-center text-xs text-neutral-600">
-        v1 · yt.philippsowik.de
-      </footer>
-    </main>
+    <AppShell
+      recents={library.map((c) => ({ id: c.channelId, title: c.title }))}
+      activeId={creator?.id}
+      onHome={home}
+      onNew={home}
+      onSelectRecent={openRecent}
+    >
+      <TopBar title={title} subtitle={subtitle} right={right} />
+      <div style={{ flex: 1, position: "relative", minHeight: 0, display: "flex", flexDirection: "column" }}>{body}</div>
+    </AppShell>
   );
 }
