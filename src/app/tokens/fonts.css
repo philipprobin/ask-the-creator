@@ -1,0 +1,14 @@
+/* ── Webfonts ──────────────────────────────────────────────
+   Display: Wosker Bold (free "Wosker Demo" cut) via cdnfonts.
+   Body/UI:  Space Grotesk · Mono: Space Mono (Google Fonts).
+   NOTE: Wosker is loaded from the cdnfonts CDN, not self-hosted.
+   Provide a licensed Wosker Bold .woff2 to self-host if needed. */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+@font-face {
+  font-family: 'Wosker Demo';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: local('Wosker Demo'), url('https://fonts.cdnfonts.com/s/111559/WoskerDemo.woff') format('woff');
+}

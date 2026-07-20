@@ -5,6 +5,8 @@ import type {
   EmbeddedChannel,
   EmbeddedVideo,
   ChatTurn,
+  VideoMeta,
+  ScoredVideo,
 } from "./types";
 
 let pool: Pool | null = null;
@@ -227,5 +229,143 @@ export async function getChatHistory(channelId: string): Promise<ChatTurn[]> {
     role: r.role,
     content: r.content,
     sources: r.sources || undefined,
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────
+// video_meta — question→video relevance index (title + description)
+// ─────────────────────────────────────────────────────────────
+
+export type VideoMetaInput = VideoMeta & { embedding: number[] };
+
+/** Video IDs already present in the meta index (incremental dedup). */
+export async function getMetaVideoIds(channelId: string): Promise<Set<string>> {
+  const db = getPool();
+  const result = await db.query(
+    "SELECT video_id FROM video_meta WHERE channel_id = $1",
+    [channelId]
+  );
+  return new Set(result.rows.map((r) => r.video_id));
+}
+
+export async function isChannelMetaIndexed(channelId: string): Promise<boolean> {
+  const db = getPool();
+  const result = await db.query(
+    "SELECT 1 FROM video_meta WHERE channel_id = $1 LIMIT 1",
+    [channelId]
+  );
+  return result.rowCount! > 0;
+}
+
+/** Upsert channel + a batch of scored-video metadata rows (with embeddings). */
+export async function saveVideoMeta(
+  channelId: string,
+  meta: { channelTitle: string; channelThumbnail?: string },
+  rows: VideoMetaInput[]
+): Promise<void> {
+  const db = getPool();
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO channels (channel_id, title, thumbnail, last_embedded_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (channel_id) DO UPDATE
+         SET title = EXCLUDED.title,
+             thumbnail = COALESCE(EXCLUDED.thumbnail, channels.thumbnail)`,
+      [channelId, meta.channelTitle, meta.channelThumbnail || null]
+    );
+    for (const v of rows) {
+      await client.query(
+        `INSERT INTO video_meta
+         (channel_id, video_id, source, title, description, thumbnail, duration, published_at, view_count, is_short, embedding)
+         VALUES ($1,$2,'youtube',$3,$4,$5,$6,$7,$8,$9,$10)
+         ON CONFLICT (channel_id, video_id) DO UPDATE
+           SET title = EXCLUDED.title,
+               description = EXCLUDED.description,
+               thumbnail = EXCLUDED.thumbnail,
+               duration = EXCLUDED.duration,
+               published_at = EXCLUDED.published_at,
+               view_count = EXCLUDED.view_count,
+               is_short = EXCLUDED.is_short,
+               embedding = EXCLUDED.embedding`,
+        [
+          channelId,
+          v.id,
+          v.title,
+          v.description || "",
+          v.thumbnail || null,
+          v.duration || null,
+          v.publishedAt || null,
+          v.viewCount ? parseInt(v.viewCount, 10) : null,
+          v.isShort,
+          JSON.stringify(v.embedding),
+        ]
+      );
+    }
+    const count = await client.query(
+      "SELECT COUNT(*)::int AS n FROM video_meta WHERE channel_id = $1",
+      [channelId]
+    );
+    await client.query(
+      "UPDATE channels SET meta_indexed_at = NOW(), meta_video_count = $2 WHERE channel_id = $1",
+      [channelId, count.rows[0].n]
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/** Rank a channel's videos by cosine similarity to the question embedding. */
+export async function scoreVideos(
+  channelId: string,
+  queryEmbedding: number[],
+  limit = 200
+): Promise<ScoredVideo[]> {
+  const db = getPool();
+  const result = await db.query(
+    `SELECT video_id, source, title, description, thumbnail, duration,
+            published_at, view_count, is_short,
+            1 - (embedding <=> $2::vector) AS score
+     FROM video_meta
+     WHERE channel_id = $1
+     ORDER BY embedding <=> $2::vector
+     LIMIT $3`,
+    [channelId, JSON.stringify(queryEmbedding), limit]
+  );
+  return result.rows.map((r) => ({
+    videoId: r.video_id,
+    source: r.source === "spotify" ? "spotify" : "youtube",
+    title: r.title,
+    description: r.description || undefined,
+    thumbnail: r.thumbnail || undefined,
+    duration: r.duration || undefined,
+    publishedAt: r.published_at || undefined,
+    viewCount: r.view_count != null ? String(r.view_count) : undefined,
+    isShort: !!r.is_short,
+    score: Math.max(0, Math.min(100, Math.round(parseFloat(r.score) * 100))),
+  }));
+}
+
+/** Minimal title/thumbnail lookup for a set of selected video IDs (used by embed). */
+export async function getVideoMetaForIds(
+  channelId: string,
+  ids: string[]
+): Promise<{ videoId: string; title: string; thumbnail?: string }[]> {
+  if (ids.length === 0) return [];
+  const db = getPool();
+  const result = await db.query(
+    `SELECT video_id, title, thumbnail FROM video_meta
+     WHERE channel_id = $1 AND video_id = ANY($2)`,
+    [channelId, ids]
+  );
+  return result.rows.map((r) => ({
+    videoId: r.video_id,
+    title: r.title,
+    thumbnail: r.thumbnail || undefined,
   }));
 }
