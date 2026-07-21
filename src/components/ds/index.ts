@@ -20,3 +20,5 @@ export { ACCENTS, accentFor } from "./palette";
 export type { Accent } from "./palette";
 export { Spinner } from "./Spinner";
 export type { SpinnerProps } from "./Spinner";
+
+export { Markdown } from "./Markdown";

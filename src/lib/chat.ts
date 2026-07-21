@@ -52,7 +52,12 @@ export async function answer(
     `WICHTIG — Quellenbelege: Belege möglichst JEDE Aussage mit einer Quellenangabe in ` +
     `eckigen Klammern, z. B. [1] oder [2], passend zu den nummerierten ${sourceWord}. ` +
     `Setze die Markierung direkt hinter die jeweilige Aussage. Stützen mehrere Quellen eine ` +
-    `Aussage, nenne sie zusammen, z. B. [1][3]. Verwende ausschließlich die vorhandenen Nummern.`;
+    `Aussage, nenne sie zusammen, z. B. [1][3]. Verwende ausschließlich die vorhandenen Nummern.\n\n` +
+    `Formatierung: Deine Antwort wird als Markdown gerendert — nutze das für eine visuell ` +
+    `klarere Darstellung: **Fettung** für Kernbegriffe, Aufzählungs- oder nummerierte Listen ` +
+    `für Schritte/Punkte, ## Zwischenüberschriften bei längeren Antworten, > Blockzitate für ` +
+    `wörtliche Aussagen und Tabellen für Vergleiche. Halte es dezent und lesbar, nicht überladen. ` +
+    `Die Quellenmarkierungen [1] bleiben normaler Text im Fließtext.`;
 
   const user =
     ctx.mode === "rag"
