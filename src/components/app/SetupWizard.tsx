@@ -116,7 +116,7 @@ export function SetupWizard({ status, onDone, onClose }: { status: ConfigStatus;
         <p style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.55, marginBottom: 22 }}>
           {settings
             ? "Bearbeite deine API-Keys oder füge neue hinzu. Leere Felder bleiben unverändert; ausgefüllte Felder überschreiben den gespeicherten Key."
-            : "Ask the Creator läuft mit deinen eigenen API-Keys. Nur der OpenAI-Key ist zwingend für Antworten; YouTube (Kanalsuche) und Supadata (Transkripte) sind für den vollen Funktionsumfang empfohlen. Keys werden lokal gespeichert."}
+            : "Ask the Creator läuft mit deinen eigenen API-Keys. OpenAI (Antworten) und Supadata (Transkripte) sind erforderlich; YouTube ist optional (ohne läuft die Kanalsuche keyless). Keys werden lokal gespeichert."}
         </p>
 
         <KeyRow
@@ -146,7 +146,7 @@ export function SetupWizard({ status, onDone, onClose }: { status: ConfigStatus;
         <KeyRow
           title="Supadata API Key" envManaged={status.env.supadata} present={status.hasSupadata}
           value={supadata} onChange={setSupadata} placeholder="sd_..."
-          hintText={<>Empfohlen · YouTube-Transkripte (Free-Tier verfügbar). <a href="https://supadata.ai" target="_blank" rel="noreferrer" style={{ color: "var(--text-link)" }}>Key holen ↗</a></>}
+          hintText={<>Erforderlich · YouTube-Transkripte (Free-Tier verfügbar). Ohne diesen Key können keine Antworten erzeugt werden. <a href="https://supadata.ai" target="_blank" rel="noreferrer" style={{ color: "var(--text-link)" }}>Key holen ↗</a></>}
         />
 
         {error && <div style={{ color: "var(--color-danger)", fontSize: 13, marginBottom: 12 }}>{error}</div>}
