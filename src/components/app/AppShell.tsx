@@ -41,7 +41,7 @@ function NavItem({ label, active, dotColor, onClick }: { label: string; active?:
 export interface Recent { id: string; title: string }
 
 export function AppShell({
-  children, recents = [], activeId, onHome, onNew, onSelectRecent,
+  children, recents = [], activeId, onHome, onNew, onSelectRecent, onSettings,
 }: {
   children: React.ReactNode;
   recents?: Recent[];
@@ -49,6 +49,7 @@ export function AppShell({
   onHome?: () => void;
   onNew?: () => void;
   onSelectRecent?: (id: string) => void;
+  onSettings?: () => void;
 }) {
   return (
     <div style={{ display: "flex", height: "100dvh", background: "var(--surface-page)", fontFamily: "var(--font-sans)" }}>
@@ -72,6 +73,14 @@ export function AppShell({
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)" }}>You</div>
               <UsageBadge />
             </div>
+            {onSettings && (
+              <button onClick={onSettings} aria-label="Einstellungen" title="Einstellungen · API-Keys"
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-sunken)"; e.currentTarget.style.color = "var(--text-body)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-subtle)"; }}
+                style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 8, border: "none", background: "transparent", color: "var(--text-subtle)", cursor: "pointer", display: "grid", placeItems: "center", transition: "background .12s, color .12s" }}>
+                <Icon name="settings" size={17} />
+              </button>
+            )}
           </div>
         </div>
       </aside>

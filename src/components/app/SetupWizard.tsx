@@ -53,7 +53,8 @@ function KeyRow({
   );
 }
 
-export function SetupWizard({ status, onDone }: { status: ConfigStatus; onDone: () => void }) {
+export function SetupWizard({ status, onDone, onClose }: { status: ConfigStatus; onDone: () => void; onClose?: () => void }) {
+  const settings = !!onClose; // opened from the sidebar to edit keys later
   const [openai, setOpenai] = React.useState("");
   const [youtube, setYoutube] = React.useState("");
   const [supadata, setSupadata] = React.useState("");
@@ -96,18 +97,26 @@ export function SetupWizard({ status, onDone }: { status: ConfigStatus; onDone: 
   }
 
   return (
-    <div style={{ minHeight: "100dvh", display: "grid", placeItems: "center", background: "var(--grad-page-tint)", padding: 24 }}>
-      <div style={{ width: "100%", maxWidth: 520, background: "var(--surface-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", padding: 30 }}>
+    <div style={settings
+      ? { position: "fixed", inset: 0, zIndex: 60, display: "grid", placeItems: "center", background: "rgba(17,20,32,.5)", padding: 24, overflowY: "auto" }
+      : { minHeight: "100dvh", display: "grid", placeItems: "center", background: "var(--grad-page-tint)", padding: 24 }}>
+      <div style={{ position: "relative", width: "100%", maxWidth: 520, background: "var(--surface-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-lg)", padding: 30 }}>
+        {settings && (
+          <button onClick={onClose} aria-label="Schließen"
+            style={{ position: "absolute", top: 14, right: 14, width: 32, height: 32, borderRadius: 8, border: "1px solid var(--border-subtle)", background: "var(--surface-page)", color: "var(--text-muted)", cursor: "pointer", display: "grid", placeItems: "center" }}>
+            <Icon name="x" size={16} />
+          </button>
+        )}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <span style={{ width: 34, height: 34, borderRadius: 9, background: "var(--grad-brand)", display: "grid", placeItems: "center" }}>
-            <Icon name="sparkles" size={17} color="#fff" />
+            <Icon name={settings ? "settings" : "sparkles"} size={17} color="#fff" />
           </span>
-          <h1 style={{ fontFamily: "var(--font-display)", fontSize: 26, color: "var(--text-strong)", letterSpacing: "-.01em" }}>Erste Einrichtung</h1>
+          <h1 style={{ fontFamily: "var(--font-display)", fontSize: 26, color: "var(--text-strong)", letterSpacing: "-.01em" }}>{settings ? "Einstellungen" : "Erste Einrichtung"}</h1>
         </div>
         <p style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.55, marginBottom: 22 }}>
-          Ask the Creator läuft mit deinen eigenen API-Keys. Nur der OpenAI-Key ist zwingend
-          für Antworten; YouTube (Kanalsuche) und Supadata (Transkripte) sind für den vollen
-          Funktionsumfang empfohlen. Keys werden lokal gespeichert.
+          {settings
+            ? "Bearbeite deine API-Keys oder füge neue hinzu. Leere Felder bleiben unverändert; ausgefüllte Felder überschreiben den gespeicherten Key."
+            : "Ask the Creator läuft mit deinen eigenen API-Keys. Nur der OpenAI-Key ist zwingend für Antworten; YouTube (Kanalsuche) und Supadata (Transkripte) sind für den vollen Funktionsumfang empfohlen. Keys werden lokal gespeichert."}
         </p>
 
         <KeyRow
@@ -143,8 +152,8 @@ export function SetupWizard({ status, onDone }: { status: ConfigStatus; onDone: 
         {error && <div style={{ color: "var(--color-danger)", fontSize: 13, marginBottom: 12 }}>{error}</div>}
 
         <Button variant="accent" size="lg" fullWidth onClick={save} disabled={!openaiReady || saving}
-          leftIcon={saving ? <Spinner size={16} color="#fff" /> : <Icon name="arrow-right" size={17} />}>
-          {saving ? "Speichere…" : "Speichern & loslegen"}
+          leftIcon={saving ? <Spinner size={16} color="#fff" /> : <Icon name={settings ? "save" : "arrow-right"} size={17} />}>
+          {saving ? "Speichere…" : settings ? "Speichern" : "Speichern & loslegen"}
         </Button>
         <div style={{ fontSize: 11.5, color: "var(--text-subtle)", textAlign: "center", marginTop: 12 }}>
           Speicherort: <code style={{ fontFamily: "var(--font-mono)" }}>data/config.json</code> (git-ignored). Auf gehosteten Umgebungen bitte Environment-Variablen setzen.

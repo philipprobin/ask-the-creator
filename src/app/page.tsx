@@ -18,6 +18,8 @@ export default function Home() {
   const [library, setLibrary] = useState<EmbeddedChannel[]>([]);
 
   const [setup, setSetup] = useState<ConfigStatus | "ok" | null>(null);
+  const [status, setStatus] = useState<ConfigStatus | null>(null); // last fetched, for the settings panel
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const refreshLibrary = useCallback(() => {
     fetch("/api/channels").then((r) => r.json()).then((d) => setLibrary(d.channels || [])).catch(() => {});
@@ -27,10 +29,12 @@ export default function Home() {
   const checkSetup = useCallback(() => {
     fetch("/api/config/status")
       .then((r) => r.json())
-      .then((s: ConfigStatus) => setSetup(s.hasOpenAI ? "ok" : s))
+      .then((s: ConfigStatus) => { setStatus(s); setSetup(s.hasOpenAI ? "ok" : s); })
       .catch(() => setSetup("ok")); // don't block the app if the check fails
   }, []);
   useEffect(() => { checkSetup(); }, [checkSetup]);
+
+  const openSettings = () => { checkSetup(); setSettingsOpen(true); };
 
   const home = () => { setStage("pick"); setCreator(null); setQuestion(""); refreshLibrary(); };
   const pick = (c: Channel) => { setCreator(c); setQuestion(""); setStage("source"); };
@@ -66,9 +70,17 @@ export default function Home() {
       onHome={home}
       onNew={home}
       onSelectRecent={openRecent}
+      onSettings={openSettings}
     >
       <TopBar title={title} subtitle={subtitle} right={right} />
       <div style={{ flex: 1, position: "relative", minHeight: 0, display: "flex", flexDirection: "column" }}>{body}</div>
+      {settingsOpen && status && (
+        <SetupWizard
+          status={status}
+          onDone={() => { checkSetup(); setSettingsOpen(false); }}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </AppShell>
   );
 }
