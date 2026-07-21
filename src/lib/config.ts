@@ -1,9 +1,23 @@
+export type StorageBackend = "pgvector" | "sqlite" | "memory";
+
+function resolveBackend(): StorageBackend {
+  const explicit = process.env.STORAGE_BACKEND as StorageBackend | undefined;
+  if (explicit === "pgvector" || explicit === "sqlite" || explicit === "memory") {
+    return explicit;
+  }
+  // Default: pgvector when a Postgres URL is configured (hosted/cloud),
+  // otherwise a local SQLite file (zero-setup self-host default).
+  return process.env.DATABASE_URL ? "pgvector" : "sqlite";
+}
+
 export const config = {
   openaiKey: process.env.OPENAI_API_KEY || "",
   youtubeKey: process.env.YOUTUBE_API_KEY || "",
   databaseUrl: process.env.DATABASE_URL || "",
   chatModel: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
   embedModel: process.env.OPENAI_EMBED_MODEL || "text-embedding-3-small",
+  storageBackend: resolveBackend(),
+  sqlitePath: process.env.SQLITE_PATH || "data/ask-the-creator.db",
 };
 
 export const hasOpenAI = () => config.openaiKey.length > 0;

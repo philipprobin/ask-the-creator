@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Native module — must not be bundled by Next's server compiler.
+  serverExternalPackages: ["better-sqlite3"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**.ytimg.com" },

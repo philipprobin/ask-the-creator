@@ -8,6 +8,7 @@ import type {
   VideoMeta,
   ScoredVideo,
 } from "./types";
+import { joinTranscript } from "./store/join";
 
 let pool: Pool | null = null;
 
@@ -368,4 +369,69 @@ export async function getVideoMetaForIds(
     title: r.title,
     thumbnail: r.thumbnail || undefined,
   }));
+}
+
+// ─────────────────────────────────────────────────────────────
+// embed progress (temp table, mirrors the sqlite backend)
+// ─────────────────────────────────────────────────────────────
+
+export async function setEmbedStatus(
+  channelId: string,
+  processed: number,
+  total: number,
+  done: boolean
+): Promise<void> {
+  const db = getPool();
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS embed_progress (
+        channel_id TEXT PRIMARY KEY, processed INT, total INT,
+        done BOOLEAN, updated_at TIMESTAMPTZ DEFAULT NOW()
+      )`);
+    await db.query(
+      `INSERT INTO embed_progress (channel_id, processed, total, done)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (channel_id) DO UPDATE
+         SET processed = $2, total = $3, done = $4, updated_at = NOW()`,
+      [channelId, processed, total, done]
+    );
+  } catch (e) {
+    console.error("Failed to set embed status:", e);
+  }
+}
+
+export async function getEmbedStatus(
+  channelId: string
+): Promise<{ processed: number; total: number; done: boolean }> {
+  const db = getPool();
+  try {
+    const r = await db.query(
+      "SELECT processed, total, done FROM embed_progress WHERE channel_id = $1",
+      [channelId]
+    );
+    if (r.rows.length === 0) return { processed: 0, total: 0, done: false };
+    return { processed: r.rows[0].processed, total: r.rows[0].total, done: r.rows[0].done };
+  } catch (e) {
+    console.error("Failed to get embed status:", e);
+    return { processed: 0, total: 0, done: false };
+  }
+}
+
+/** Reconstruct a channel's transcript by concatenating stored chunks in order. */
+export async function loadChannelTranscript(
+  channelId: string
+): Promise<{ text: string; videoCount: number }> {
+  const db = getPool();
+  const result = await db.query(
+    `SELECT video_id, video_title, chunk_text FROM embeddings
+     WHERE channel_id = $1 ORDER BY video_id, chunk_start`,
+    [channelId]
+  );
+  return joinTranscript(
+    result.rows.map((r) => ({
+      video_id: r.video_id,
+      video_title: r.video_title,
+      chunk_text: r.chunk_text,
+    }))
+  );
 }
