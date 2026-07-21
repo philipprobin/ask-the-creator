@@ -18,18 +18,31 @@ function resolveBackend(): StorageBackend {
 // Env vars always win, so on Vercel/hosted the keys come from the environment
 // (read-only) and this file is irrelevant. Locally the wizard writes them here.
 const LOCAL_CONFIG_PATH = process.env.LOCAL_CONFIG_PATH || "data/config.json";
-let fileKeys: Partial<Record<KeyName, string>> = loadFileKeys();
+let fileKeys: Partial<Record<KeyName, string>> = {};
+let fileKeysMtime = -1;
 
-function loadFileKeys(): Partial<Record<KeyName, string>> {
+/**
+ * Return the wizard-saved keys, re-reading the file when it changes on disk.
+ * The mtime check makes a key saved at runtime (settings panel) take effect
+ * immediately — without it, a long-running server keeps a stale cache from
+ * import time and never sees the newly-added key.
+ */
+function currentFileKeys(): Partial<Record<KeyName, string>> {
   try {
-    return JSON.parse(fs.readFileSync(path.resolve(LOCAL_CONFIG_PATH), "utf8"));
+    const p = path.resolve(LOCAL_CONFIG_PATH);
+    const m = fs.statSync(p).mtimeMs;
+    if (m !== fileKeysMtime) {
+      fileKeys = JSON.parse(fs.readFileSync(p, "utf8"));
+      fileKeysMtime = m;
+    }
   } catch {
-    return {};
+    // File missing/unreadable → keep whatever we last had (possibly {}).
   }
+  return fileKeys;
 }
 
 function resolveKey(name: KeyName): string {
-  return process.env[name] || fileKeys[name] || "";
+  return process.env[name] || currentFileKeys()[name] || "";
 }
 
 /** True when the key is supplied by the environment (i.e. not editable in-app). */
@@ -43,10 +56,11 @@ export function setLocalKeys(partial: Partial<Record<KeyName, string>>): void {
   for (const [k, v] of Object.entries(partial)) {
     if (typeof v === "string" && v.trim()) clean[k as KeyName] = v.trim();
   }
-  fileKeys = { ...fileKeys, ...clean };
+  fileKeys = { ...currentFileKeys(), ...clean };
   const p = path.resolve(LOCAL_CONFIG_PATH);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, JSON.stringify(fileKeys, null, 2), { mode: 0o600 });
+  try { fileKeysMtime = fs.statSync(p).mtimeMs; } catch { /* re-read next access */ }
 }
 
 export const config = {

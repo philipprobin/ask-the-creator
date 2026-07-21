@@ -177,7 +177,10 @@ export async function listVideosForChannel(channelId: string): Promise<EmbeddedV
 }
 
 export async function getEmbeddedVideoIds(channelId: string): Promise<Set<string>> {
-  const rows = getDb().prepare("SELECT video_id FROM videos WHERE channel_id = ?").all(channelId) as { video_id: string }[];
+  // Only videos that actually produced chunks count as embedded. Videos skipped
+  // (no transcript / transient fetch failure) have chunk_count 0 and stay
+  // eligible for retry on the next build instead of being poisoned forever.
+  const rows = getDb().prepare("SELECT video_id FROM videos WHERE channel_id = ? AND chunk_count > 0").all(channelId) as { video_id: string }[];
   return new Set(rows.map((r) => r.video_id));
 }
 

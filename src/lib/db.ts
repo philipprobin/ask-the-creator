@@ -199,8 +199,10 @@ export async function getEmbeddedVideoIds(
   channelId: string
 ): Promise<Set<string>> {
   const db = getPool();
+  // Only videos with chunks count as embedded — skipped (0-chunk) videos stay
+  // eligible for retry instead of being permanently marked done.
   const result = await db.query(
-    "SELECT video_id FROM videos WHERE channel_id = $1",
+    "SELECT video_id FROM videos WHERE channel_id = $1 AND chunk_count > 0",
     [channelId]
   );
   return new Set(result.rows.map((r) => r.video_id));

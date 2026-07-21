@@ -86,8 +86,9 @@ export async function listVideosForChannel(channelId: string): Promise<EmbeddedV
 }
 
 export async function getEmbeddedVideoIds(channelId: string): Promise<Set<string>> {
-  const meta = memMeta.get(channelId);
-  return new Set((meta?.videos || []).map((v) => v.videoId));
+  // Only videos that produced chunks — skipped videos stay eligible for retry.
+  const chunks = memChunks.get(channelId) || [];
+  return new Set(chunks.map((c) => c.videoId));
 }
 
 export async function saveChatTurn(channelId: string, turn: ChatTurn): Promise<void> {
