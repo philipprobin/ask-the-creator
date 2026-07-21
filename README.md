@@ -1,82 +1,97 @@
-# ask-the-creator
+# Ask the Creator
 
-Chat with any YouTuber, grounded in their own video transcripts (RAG).
+**Ask any YouTube creator a question and get an answer in their voice — grounded only in their actual videos, with clickable sources.**
 
-Flow: **search a channel → pick filters (Shorts/videos, count, order) → "Embetten" → RAG chat** with answers in the creator's style and clickable video+timestamp sources.
+Pick a creator, type a question, and the app scores every video in their library for relevance, pulls the transcripts of the ones you choose, and answers from them — citing the exact videos (and timestamps) it used.
 
-## Stack
+Self-hosted, bring-your-own-API-keys. Runs locally with zero cloud services by default.
 
-- Next.js (App Router) + TypeScript + Tailwind
-- YouTube Data API v3 (channel search, video listing)
-- **Supadata API** (YouTube transcripts, bypasses IP blocks)
-- OpenAI embeddings + chat
-- **Postgres + pgvector** (persistent embeddings across serverless instances)
-- **Password gate** (optional, via `SITE_PASSWORD`)
+<!-- Add a demo GIF at docs/demo.gif and it renders here -->
+<!-- ![demo](docs/demo.gif) -->
 
-## Mock mode
+---
 
-Without API keys the app still runs end-to-end with **mock channels, transcripts and embeddings**, so the full UI/flow works for development and demos. Set the keys for the real thing.
+## Quickstart
 
-## Setup
+### Local (recommended — zero cloud setup)
 
 ```bash
+git clone https://github.com/philipprobin/ask-the-creator
+cd ask-the-creator
 npm install
-cp .env.example .env.local   # fill in keys
 npm run dev
 ```
 
-### Required env
+Open http://localhost:3000 — a **setup wizard** asks for your API keys on first run (and validates them). That's it: embeddings, transcripts, and chat history are stored in a local SQLite file under `data/`.
 
-| Var | What | Where |
-| --- | --- | --- |
-| `OPENAI_API_KEY` | embeddings + chat | https://platform.openai.com/api-keys |
-| `SUPADATA_API_KEY` | YouTube transcripts (bypasses IP blocks) | https://supadata.ai |
-| `DATABASE_URL` | **Postgres with pgvector** (required for persistence) | See [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) |
-| `YOUTUBE_API_KEY` | (optional) channel/video search | Google Cloud Console → enable "YouTube Data API v3" |
-| `SITE_PASSWORD` | (optional) password-protect entire app | any string |
+### Docker
 
-**⚠️ Without `DATABASE_URL`:** Embeddings are stored in-memory and **lost between serverless instances** (Vercel). You'll see "channel not embedded" errors. Follow [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) to fix this.
+```bash
+docker compose up
+```
 
-### Database Setup
+Same thing, containerized. Set keys in the wizard or pass them as environment variables (see below).
 
-See **[SUPABASE_SETUP.md](./SUPABASE_SETUP.md)** for step-by-step Supabase + pgvector setup (5 minutes, free tier available).
+---
 
-On **Vercel**: add env vars under Project → Settings → Environment Variables, then redeploy.
+## What you need
+
+| Key | Purpose | Required? | Where |
+|---|---|---|---|
+| **OpenAI** | Embeddings + answer generation | **Yes** | [platform.openai.com](https://platform.openai.com/api-keys) |
+| **YouTube Data API v3** | Channel search + video metadata | Recommended (free) | [Google Cloud Console](https://console.cloud.google.com/apis/library/youtube.googleapis.com) |
+| **Supadata** | YouTube transcripts | Recommended (free tier) | [supadata.ai](https://supadata.ai) |
+
+> **Why Supadata for transcripts?** Keyless extraction (youtubei.js / timedtext scraping) is actively blocked by YouTube's anti-bot measures. Supadata fetches transcripts reliably from any IP, so we rely on it instead of a fragile scraper.
+
+Enter keys in the in-app wizard (saved to `data/config.json`, git-ignored) or via environment variables. **Environment variables always win** — set them in hosted deploys.
+
+---
 
 ## How it works
 
-1. **Auth Gate** — if `SITE_PASSWORD` is set, user must enter password (stored in sessionStorage).
-2. `/api/search` — YouTube channel search (mock list without key).
-3. `/api/embed` — lists videos with filters, fetches transcripts via **Supadata API** (fallback to scraping if unavailable), chunks (~900 chars), embeds with OpenAI, stores in **Postgres with pgvector**.
-4. `/api/chat` — embeds the question, **pgvector cosine similarity search** for top chunks, asks the model to answer **in the creator's voice** citing `[n]` sources.
-
-## Transcript Strategy
-
-1. **Supadata API** (primary, bypasses YouTube datacenter IP blocks)
-2. Watch page scraping (fallback, brittle)
-3. Mock segments (dev mode)
-
-## Architecture
-
 ```
-User → Next.js API Routes
-         ↓
-    Postgres + pgvector (persistent embeddings)
-         ↓
-    OpenAI (embeddings + chat)
+1. Pick a creator            →  YouTube channel search
+2. Ask a question            →  every video's title+description is embedded and
+                                 ranked by cosine similarity to your question
+3. Choose the best matches   →  only those videos are transcribed + indexed (lazy)
+4. Get an answer             →  grounded in the transcripts, with source chips
 ```
 
-**Why pgvector?**
-- Vercel serverless functions don't share memory between instances
-- Without persistence, embeddings are lost on every cold start
-- pgvector provides fast cosine similarity search at database level
+**Answering is LLM-only by default.** For a normal creator the selected transcripts fit comfortably in the model's context window, so they're stuffed in directly — **no vector database required**. Only when the corpus exceeds a token threshold (`LLM_ONLY_MAX_TOKENS`, default 100k) does it fall back to **RAG** (vector search over chunks). This keeps the default setup dependency-free while scaling to large libraries.
 
-## Roadmap
+---
 
-- [x] Persist embeddings in Postgres + pgvector
-- [ ] Streaming chat responses
-- [ ] Whisper fallback for videos without captions
-- [ ] Progress UI during embedding (per-video status)
-- [ ] Better Shorts detection + date-range filter
-- [ ] Async job polling for large Supadata transcripts
-- [ ] Incremental embedding (only new videos)
+## Two ways to run
+
+| | **Local / self-host** | **Hosted (e.g. Vercel)** |
+|---|---|---|
+| Storage | SQLite file (`data/`) | Postgres + pgvector (set `DATABASE_URL`, e.g. Supabase/Neon) |
+| Transcripts | Supadata key | Supadata key (needed — datacenter IPs are blocked) |
+| Keys | In-app wizard → `data/config.json` | Environment variables |
+
+The same codebase serves both — it auto-detects Postgres when `DATABASE_URL` is set, otherwise uses SQLite.
+
+## Configuration
+
+All env vars are optional except `OPENAI_API_KEY`. See [`.env.example`](.env.example) for the full list (`STORAGE_BACKEND`, `SQLITE_PATH`, `LLM_ONLY_MAX_TOKENS`, model overrides, `SITE_PASSWORD`).
+
+## Cost
+
+Runs on your own OpenAI key. The sidebar shows a live cost estimate (tokens × current model prices). With the defaults (`gpt-4o-mini`, `text-embedding-3-small`) a typical question costs a fraction of a cent.
+
+## Tech stack
+
+Next.js 15 (App Router) · TypeScript · OpenAI (chat + embeddings) · SQLite (`better-sqlite3`) / Postgres + pgvector · Supadata (transcripts) · YouTube Data API.
+
+## ⚠️ Legal / fair use
+
+This is a **personal research and learning tool**. It fetches transcripts of publicly available videos and generates answers grounded in them, for the person running the instance. You are responsible for complying with YouTube's Terms of Service, the API providers' terms, and applicable copyright law in your jurisdiction. It is **not** intended to republish, redistribute, or commercially exploit creators' content. Bring your own API keys; each self-hosted instance operates under its own responsibility.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Issues and PRs welcome.
+
+## License
+
+[MIT](LICENSE)

@@ -13,3 +13,6 @@ next-env.d.ts
 *.db
 *.db-shm
 *.db-wal
+
+# local design assets / archives (not part of the repo)
+*.zip
