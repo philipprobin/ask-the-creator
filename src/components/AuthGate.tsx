@@ -10,12 +10,24 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    // Check if already authed in sessionStorage
-    if (typeof window !== "undefined") {
-      const authed = sessionStorage.getItem("auth") === "true";
-      setIsAuthed(authed);
+    if (typeof window === "undefined") return;
+    if (sessionStorage.getItem("auth") === "true") {
+      setIsAuthed(true);
       setChecking(false);
+      return;
     }
+    // No stored auth — ask the server whether a password is even required.
+    // If not, skip the gate entirely (e.g. local/self-host without SITE_PASSWORD).
+    fetch("/api/auth")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.required) {
+          sessionStorage.setItem("auth", "true");
+          setIsAuthed(true);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setChecking(false));
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
