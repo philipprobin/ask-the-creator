@@ -57,6 +57,21 @@ function Thumb({ videoId, source, duration }: { videoId: string; source: "youtub
   );
 }
 
+function TypeTag({ isShort }: { isShort: boolean }) {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0,
+      fontFamily: "var(--font-mono)", fontSize: 10.5, fontWeight: 600, lineHeight: 1,
+      padding: "3px 7px", borderRadius: "var(--radius-pill)",
+      color: isShort ? "var(--color-accent)" : "var(--text-muted)",
+      background: isShort ? "var(--amber-50, rgba(245,158,11,.12))" : "var(--surface-sunken)",
+      border: `1px solid ${isShort ? "rgba(245,158,11,.35)" : "var(--border-subtle)"}`,
+    }}>
+      <Icon name={isShort ? "zap" : "play"} size={11} /> {isShort ? "Short" : "Video"}
+    </span>
+  );
+}
+
 function CreditMeter({ used, over }: { used: number; over: boolean }) {
   const pct = Math.min(100, (used / FREE_CREDITS) * 100);
   return (
@@ -83,6 +98,8 @@ export function SourceSelect({ creator, onBack, onBuilt }: {
 }) {
   const [phase, setPhase] = React.useState<"ask" | "matching" | "review" | "building">("ask");
   const [question, setQuestion] = React.useState("");
+  const [includeVideos, setIncludeVideos] = React.useState(true);
+  const [includeShorts, setIncludeShorts] = React.useState(true);
   const [matches, setMatches] = React.useState<ScoredVideo[]>([]);
   const [sel, setSel] = React.useState<Set<string>>(new Set());
   const [error, setError] = React.useState("");
@@ -96,19 +113,20 @@ export function SourceSelect({ creator, onBack, onBuilt }: {
   const over = used > FREE_CREDITS;
 
   async function findSources() {
-    if (!question.trim()) return;
+    if (!question.trim() || (!includeVideos && !includeShorts)) return;
     setError("");
     setPhase("matching");
     try {
       const res = await fetch("/api/match", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channelId: creator.id, channelTitle: creator.title, channelThumbnail: creator.thumbnail, question: question.trim() }),
+        body: JSON.stringify({ channelId: creator.id, channelTitle: creator.title, channelThumbnail: creator.thumbnail, question: question.trim(), includeVideos, includeShorts }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Matching fehlgeschlagen");
       const m: ScoredVideo[] = data.matches || [];
       setMatches(m);
-      setSel(new Set(m.slice(0, 20).map((x) => x.videoId)));
+      // Pre-select the 10 highest-scoring sources (any mix of videos & shorts).
+      setSel(new Set(m.slice(0, 10).map((x) => x.videoId)));
       setPhase("review");
     } catch (e: any) {
       setError(e.message);
@@ -213,10 +231,18 @@ export function SourceSelect({ creator, onBack, onBuilt }: {
             onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) findSources(); }}
             placeholder="e.g. How do I actually get into a flow state and stay focused for hours?"
             style={{ fontSize: 16, minHeight: 96, borderRadius: "var(--radius-lg)" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 20, marginTop: 18 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-muted)" }}>Include</span>
+            <Checkbox checked={includeVideos} disabled={busy} onChange={(e) => setIncludeVideos(e.target.checked)}
+              label={<span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Icon name="play" size={13} /> Videos</span>} />
+            <Checkbox checked={includeShorts} disabled={busy} onChange={(e) => setIncludeShorts(e.target.checked)}
+              label={<span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Icon name="zap" size={13} /> Shorts</span>} />
+            <span style={{ fontSize: 12, color: "var(--text-subtle)" }}>up to 150 of each</span>
+          </div>
           {error && <div style={{ marginTop: 12, color: "var(--color-danger)", fontSize: 13.5 }}>{error}</div>}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16 }}>
             <span style={{ fontSize: 12.5, color: "var(--text-subtle)" }}>⌘ + Enter to find sources</span>
-            <Button variant="accent" size="lg" disabled={!question.trim() || busy}
+            <Button variant="accent" size="lg" disabled={!question.trim() || busy || (!includeVideos && !includeShorts)}
               leftIcon={busy ? <Spinner size={16} color="#fff" /> : <Icon name="search" size={17} />} onClick={findSources}>
               {busy ? "Matching…" : "Find matching sources"}
             </Button>
@@ -261,7 +287,10 @@ export function SourceSelect({ creator, onBack, onBuilt }: {
                 <Thumb videoId={s.videoId} source={s.source} duration={dur} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{s.title}</div>
-                  {meta && <div style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--text-muted)", marginTop: 3 }}>{meta}</div>}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
+                    <TypeTag isShort={s.isShort} />
+                    {meta && <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--text-muted)" }}>{meta}</span>}
+                  </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-subtle)" }}>{CREDIT_PER_SOURCE} cr</span>

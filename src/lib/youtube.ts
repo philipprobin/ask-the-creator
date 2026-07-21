@@ -43,15 +43,21 @@ export async function searchChannels(query: string): Promise<Channel[]> {
   return hasOpenAI() ? [] : MOCK_CHANNELS;
 }
 
-export async function listChannelVideoMeta(channelId: string, cap = 300): Promise<VideoMeta[]> {
-  if (hasYouTube()) return listChannelVideoMetaDataApi(channelId, cap);
+/** How many long-form videos and Shorts to pull for the scoring pool. */
+export interface VideoQuery { maxVideos?: number; maxShorts?: number }
+
+export async function listChannelVideoMeta(channelId: string, opts: VideoQuery = {}): Promise<VideoMeta[]> {
+  const maxVideos = opts.maxVideos ?? 150;
+  const maxShorts = opts.maxShorts ?? 150;
+  if (maxVideos <= 0 && maxShorts <= 0) return [];
+  if (hasYouTube()) return listChannelVideoMetaDataApi(channelId, maxVideos, maxShorts);
   try {
-    const r = await listChannelVideoMetaInnertube(channelId, cap);
+    const r = await listChannelVideoMetaInnertube(channelId, maxVideos, maxShorts);
     if (r.length) return r;
   } catch (e) {
     console.warn("Keyless channel videos (youtubei.js) failed:", e);
   }
-  return hasOpenAI() ? [] : mockVideos(channelId, cap);
+  return hasOpenAI() ? [] : mockVideos(channelId, maxVideos + maxShorts);
 }
 
 // ── keyless (youtubei.js / InnerTube) ──
@@ -107,45 +113,85 @@ async function searchChannelsInnertube(query: string): Promise<Channel[]> {
   return out;
 }
 
-async function listChannelVideoMetaInnertube(channelId: string, cap: number): Promise<VideoMeta[]> {
+async function listChannelVideoMetaInnertube(channelId: string, maxVideos: number, maxShorts: number): Promise<VideoMeta[]> {
   const yt = await getYT();
   const channel: any = await yt.getChannel(channelId);
-  let feed: any = await channel.getVideos();
   const out: VideoMeta[] = [];
-  let guard = 0;
-  while (out.length < cap && guard++ < 60) {
+  // The channel "Videos" tab and "Shorts" tab are separate feeds — pull each up
+  // to its own cap so the scoring pool is a real mix, and the video/short tag is
+  // unambiguous (defined by which tab it came from, not a duration guess).
+  if (maxVideos > 0) {
+    try {
+      const feed: any = await channel.getVideos();
+      await collectFeed(feed, maxVideos, false, out);
+    } catch (e) { console.warn("Keyless getVideos failed:", e); }
+  }
+  if (maxShorts > 0) {
+    try {
+      const feed: any = await channel.getShorts();
+      await collectFeed(feed, maxShorts, true, out);
+    } catch (e) { console.warn("Keyless getShorts failed:", e); }
+  }
+  return out;
+}
+
+/** Page a channel feed (Videos or Shorts) and push up to `cap` parsed items into `out`. */
+async function collectFeed(feed: any, cap: number, isShort: boolean, out: VideoMeta[]): Promise<void> {
+  let taken = 0, guard = 0;
+  while (taken < cap && guard++ < 60) {
     const items: any[] = feed?.videos ?? [];
     if (!items.length) break;
     for (const v of items) {
-      // Current youtubei.js returns "LockupView" nodes for channel videos.
-      const id = v?.content_id ?? v?.id ?? v?.video_id;
-      if (!id) continue;
-      const md = v?.metadata;
-      const badges = (v?.content_image?.overlays ?? []).flatMap((o: any) => o?.badges ?? []);
-      const durText = badges.map((b: any) => b?.text).find((t: any) => typeof t === "string" && /^\d+(:\d+)+$/.test(t));
-      const durSec = hmsToSeconds(durText);
-      const rows = md?.metadata?.metadata_rows ?? [];
-      const viewsText = rows
-        .flatMap((r: any) => r?.metadata_parts ?? [])
-        .map((p: any) => p?.text?.text)
-        .find((t: any) => typeof t === "string" && /view/i.test(t));
-      out.push({
-        id,
-        title: md?.title?.text ?? v?.title?.text ?? "",
-        description: "", // channel listings don't include descriptions (title-only scoring)
-        publishedAt: "",
-        thumbnail: pickThumb(v?.content_image?.image ?? v?.thumbnails),
-        duration: isoFromSeconds(durSec),
-        viewCount: parseCount(viewsText),
-        isShort: typeof durSec === "number" && durSec > 0 && durSec <= 60,
-      });
-      if (out.length >= cap) break;
+      const item = isShort ? parseShort(v) : parseVideo(v);
+      if (!item) continue;
+      out.push(item);
+      if (++taken >= cap) break;
     }
-    if (out.length >= cap) break;
+    if (taken >= cap) break;
     if (feed?.has_continuation) feed = await feed.getContinuation();
     else break;
   }
-  return out;
+}
+
+/** "LockupView" node from the Videos tab. */
+function parseVideo(v: any): VideoMeta | null {
+  const id = v?.content_id ?? v?.id ?? v?.video_id;
+  if (!id) return null;
+  const md = v?.metadata;
+  const badges = (v?.content_image?.overlays ?? []).flatMap((o: any) => o?.badges ?? []);
+  const durText = badges.map((b: any) => b?.text).find((t: any) => typeof t === "string" && /^\d+(:\d+)+$/.test(t));
+  const durSec = hmsToSeconds(durText);
+  const rows = md?.metadata?.metadata_rows ?? [];
+  const viewsText = rows
+    .flatMap((r: any) => r?.metadata_parts ?? [])
+    .map((p: any) => p?.text?.text)
+    .find((t: any) => typeof t === "string" && /view/i.test(t));
+  return {
+    id,
+    title: md?.title?.text ?? v?.title?.text ?? "",
+    description: "", // channel listings don't include descriptions (title-only scoring)
+    publishedAt: "",
+    thumbnail: pickThumb(v?.content_image?.image ?? v?.thumbnails),
+    duration: isoFromSeconds(durSec),
+    viewCount: parseCount(viewsText),
+    isShort: false,
+  };
+}
+
+/** "ShortsLockupView" node from the Shorts tab (different field paths, no duration). */
+function parseShort(v: any): VideoMeta | null {
+  const id = v?.on_tap_endpoint?.payload?.videoId ?? v?.content_id ?? v?.id;
+  if (!id) return null;
+  return {
+    id,
+    title: v?.overlay_metadata?.primary_text?.text ?? v?.accessibility_text?.replace(/, [\d.]+.*$/, "") ?? "",
+    description: "",
+    publishedAt: "",
+    thumbnail: pickThumb(v?.on_tap_endpoint?.payload?.thumbnail?.thumbnails ?? v?.thumbnail),
+    duration: undefined,
+    viewCount: parseCount(v?.overlay_metadata?.secondary_text?.text),
+    isShort: true,
+  };
 }
 
 // ── YouTube Data API ----
@@ -170,16 +216,19 @@ async function searchChannelsDataApi(query: string): Promise<Channel[]> {
   }));
 }
 
-async function listChannelVideoMetaDataApi(channelId: string, cap: number): Promise<VideoMeta[]> {
+async function listChannelVideoMetaDataApi(channelId: string, maxVideos: number, maxShorts: number): Promise<VideoMeta[]> {
   const chUrl = `${API}/channels?part=contentDetails&id=${channelId}&key=${config.youtubeKey}`;
   const chRes = await fetch(chUrl);
   const chData = await chRes.json();
   const uploads = chData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
   if (!uploads) return [];
 
-  const out: VideoMeta[] = [];
-  let pageToken = "";
-  while (out.length < cap) {
+  // The Data API has no separate Shorts feed — the uploads playlist mixes both.
+  // Classify by duration (≤60s = Short) and fill each bucket up to its cap.
+  const videos: VideoMeta[] = [], shorts: VideoMeta[] = [];
+  let pageToken = "", pages = 0;
+  const MAX_PAGES = 24; // 50/page → up to ~1200 uploads scanned
+  while ((videos.length < maxVideos || shorts.length < maxShorts) && pages++ < MAX_PAGES) {
     const plUrl = `${API}/playlistItems?part=contentDetails&maxResults=50&playlistId=${uploads}${pageToken ? `&pageToken=${pageToken}` : ""}&key=${config.youtubeKey}`;
     const plRes = await fetch(plUrl);
     if (!plRes.ok) break;
@@ -192,7 +241,11 @@ async function listChannelVideoMetaDataApi(channelId: string, cap: number): Prom
     const vData = await vRes.json();
     for (const v of vData.items || []) {
       const seconds = parseISODuration(v.contentDetails?.duration || "");
-      out.push({
+      const isShort = seconds > 0 && seconds <= 60;
+      const bucket = isShort ? shorts : videos;
+      const cap = isShort ? maxShorts : maxVideos;
+      if (bucket.length >= cap) continue;
+      bucket.push({
         id: v.id,
         title: v.snippet.title,
         description: v.snippet.description || "",
@@ -200,20 +253,20 @@ async function listChannelVideoMetaDataApi(channelId: string, cap: number): Prom
         thumbnail: v.snippet.thumbnails?.medium?.url || v.snippet.thumbnails?.default?.url || "",
         duration: v.contentDetails?.duration,
         viewCount: v.statistics?.viewCount,
-        isShort: seconds > 0 && seconds <= 60,
+        isShort,
       });
-      if (out.length >= cap) break;
     }
     pageToken = plData.nextPageToken;
     if (!pageToken) break;
   }
-  return out;
+  return [...videos, ...shorts];
 }
 
 /** Legacy (unused by the current flow) — kept for reference/back-compat. */
 export async function listVideos(channelId: string, filters: EmbedFilters): Promise<VideoMeta[]> {
   if (!hasYouTube()) return mockVideos(channelId, filters.maxVideos, filters.shortsOnly);
-  const all = await listChannelVideoMetaDataApi(channelId, filters.maxVideos * 2 + 10);
+  const pool = filters.maxVideos * 2 + 10;
+  const all = await listChannelVideoMetaDataApi(channelId, pool, pool);
   const filtered = all.filter((v) => (filters.shortsOnly ? v.isShort : filters.includeVideos || v.isShort));
   return filtered.slice(0, filters.maxVideos);
 }
