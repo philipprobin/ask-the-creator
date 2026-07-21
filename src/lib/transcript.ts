@@ -1,4 +1,4 @@
-import { hasYouTube, config } from "./config";
+import { hasOpenAI, config } from "./config";
 import type { TranscriptSegment } from "./types";
 
 /**
@@ -20,7 +20,8 @@ export async function fetchTranscript(
   videoId: string,
   videoTitle: string
 ): Promise<TranscriptSegment[]> {
-  if (!hasYouTube()) {
+  if (!hasOpenAI()) {
+    // Pure demo mode (no OpenAI key) — channels/videos are mocked too.
     console.log(`⚠ Using mock transcript for ${videoId} (${videoTitle})`);
     return mockTranscript(videoTitle);
   }

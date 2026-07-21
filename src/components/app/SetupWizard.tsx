@@ -131,7 +131,7 @@ export function SetupWizard({ status, onDone }: { status: ConfigStatus; onDone: 
         <KeyRow
           title="YouTube Data API Key" envManaged={status.env.youtube} present={status.hasYouTube}
           value={youtube} onChange={setYoutube} placeholder="AIza..."
-          hintText={<>Empfohlen · Kanalsuche + Metadaten (kostenlos). <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noreferrer" style={{ color: "var(--text-link)" }}>Key holen ↗</a></>}
+          hintText={<>Optional · Kanalsuche + Metadaten. Ohne Key läuft es keyless (youtubei.js, etwas fragiler). <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noreferrer" style={{ color: "var(--text-link)" }}>Key holen ↗</a></>}
         />
 
         <KeyRow

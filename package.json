@@ -15,7 +15,8 @@
     "next": "15.5.19",
     "pg": "^8.21.0",
     "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react-dom": "19.0.0",
+    "youtubei.js": "^17.2.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
