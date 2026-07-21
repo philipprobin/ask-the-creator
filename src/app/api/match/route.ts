@@ -6,7 +6,11 @@ import { getMetaVideoIds, saveVideoMeta, scoreVideos } from "@/lib/store";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const DEFAULT_CAP = 200;
+// How many of a channel's newest videos to score. Metadata embedding is cheap
+// (~$0.001 for 500 title+description strings with text-embedding-3-small), so a
+// larger pool just means more choice on the review screen. Configurable via env.
+const DEFAULT_CAP = parseInt(process.env.MATCH_CAP || "", 10) || 300;
+const MAX_CAP = 1000;
 const EMBED_BATCH = 64;
 
 /**
@@ -21,7 +25,7 @@ export async function POST(req: NextRequest) {
     const channelTitle: string = body.channelTitle || "this creator";
     const channelThumbnail: string | undefined = body.channelThumbnail;
     const question: string = (body.question || "").trim();
-    const cap: number = Math.min(Math.max(parseInt(body.cap, 10) || DEFAULT_CAP, 1), 500);
+    const cap: number = Math.min(Math.max(parseInt(body.cap, 10) || DEFAULT_CAP, 1), MAX_CAP);
 
     if (!channelId || !question) {
       return NextResponse.json({ error: "channelId and question required" }, { status: 400 });

@@ -25,7 +25,7 @@ function SourceChip({ s, i }: { s: RetrievedSource; i: number }) {
       <span style={{ position: "relative", width: 46, height: 28, borderRadius: 6, overflow: "hidden", flexShrink: 0, background: accent.grad, display: "grid", placeItems: "center" }}>
         {!broken ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={ytThumb(s.videoId)} alt="" onError={() => setBroken(true)}
+          <img src={ytThumb(s.videoId)} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)}
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
           <Icon name="play" size={12} color="#fff" />

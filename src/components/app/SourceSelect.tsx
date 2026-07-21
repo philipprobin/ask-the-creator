@@ -39,7 +39,7 @@ function Thumb({ videoId, source, duration }: { videoId: string; source: "youtub
     }}>
       {showImg ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={ytThumb(videoId)} alt="" onError={() => setBroken(true)}
+        <img src={ytThumb(videoId)} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
       ) : (
         <Icon name={yt ? "play" : "mic"} size={18} color="rgba(255,255,255,.92)" />
@@ -175,6 +175,15 @@ export function SourceSelect({ creator, onBack, onBuilt }: {
       }
 
       if (!done) throw new Error("Embedding hat das Rundenlimit erreicht. Bitte weniger Videos auswählen.");
+      // If nothing could be transcribed, don't drop the user into a broken chat.
+      if ((last?.chunks ?? 0) === 0) {
+        const n = allSkipped.length;
+        throw new Error(
+          `Keine Transkripte verfügbar${n ? ` (${n} Video${n === 1 ? "" : "s"} übersprungen)` : ""} — ` +
+          `die Videos haben keine Untertitel, oder dein Supadata-Kontingent ist erschöpft. ` +
+          `Wähle andere Videos oder prüfe deinen Supadata-Key.`
+        );
+      }
       onBuilt(question.trim(), { ...(last || {}), skipped: allSkipped } as BuildResult);
     } catch (e: any) {
       setError(e.message);
