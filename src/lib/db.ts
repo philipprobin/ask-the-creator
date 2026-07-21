@@ -8,7 +8,7 @@ import type {
   VideoMeta,
   ScoredVideo,
 } from "./types";
-import { joinTranscript } from "./store/join";
+import { joinTranscript, type JoinedTranscript } from "./store/join";
 
 let pool: Pool | null = null;
 
@@ -420,7 +420,7 @@ export async function getEmbedStatus(
 /** Reconstruct a channel's transcript by concatenating stored chunks in order. */
 export async function loadChannelTranscript(
   channelId: string
-): Promise<{ text: string; videoCount: number }> {
+): Promise<JoinedTranscript> {
   const db = getPool();
   const result = await db.query(
     `SELECT video_id, video_title, chunk_text FROM embeddings

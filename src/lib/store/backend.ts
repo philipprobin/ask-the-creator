@@ -7,6 +7,7 @@ import type {
   ScoredVideo,
 } from "../types";
 import type { SaveMeta, VideoMetaInput } from "../db";
+import type { JoinedTranscript } from "./join";
 
 export interface EmbedStatus {
   processed: number;
@@ -39,5 +40,5 @@ export interface StoreBackend {
   ): Promise<{ videoId: string; title: string; thumbnail?: string }[]>;
   setEmbedStatus(channelId: string, processed: number, total: number, done: boolean): Promise<void>;
   getEmbedStatus(channelId: string): Promise<EmbedStatus>;
-  loadChannelTranscript(channelId: string): Promise<{ text: string; videoCount: number }>;
+  loadChannelTranscript(channelId: string): Promise<JoinedTranscript>;
 }

@@ -18,6 +18,10 @@ export const config = {
   embedModel: process.env.OPENAI_EMBED_MODEL || "text-embedding-3-small",
   storageBackend: resolveBackend(),
   sqlitePath: process.env.SQLITE_PATH || "data/ask-the-creator.db",
+  // Answer routing: below this estimated transcript-token size we stuff the full
+  // transcript into the chat context (LLM-only, no vector search / no embeddings).
+  // Above it we fall back to RAG. Keep well under the chat model's context window.
+  llmOnlyMaxTokens: parseInt(process.env.LLM_ONLY_MAX_TOKENS || "", 10) || 100_000,
 };
 
 export const hasOpenAI = () => config.openaiKey.length > 0;

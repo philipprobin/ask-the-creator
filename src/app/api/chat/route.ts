@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { embed } from "@/lib/embeddings";
-import { search, hasChannel, saveChatTurn } from "@/lib/store";
+import { search, hasChannel, saveChatTurn, loadChannelTranscript } from "@/lib/store";
 import { answer } from "@/lib/chat";
+import { config } from "@/lib/config";
+import type { RetrievedSource } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+/** Rough token estimate (~4 chars/token) — good enough for the routing decision. */
+const estimateTokens = (text: string) => Math.ceil(text.length / 4);
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,27 +22,49 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "channelId and question required" }, { status: 400 });
     }
 
-    const hasEmbeddings = await hasChannel(channelId);
-    if (!hasEmbeddings) {
+    if (!(await hasChannel(channelId))) {
       return NextResponse.json(
         { error: "channel not embedded yet — run embed first" },
         { status: 409 }
       );
     }
 
-    const [qVec] = await embed([question]);
-    const sources = await search(channelId, qVec, 6);
-    const text = await answer(channelTitle, question, sources);
+    // Default: stuff the full transcript into context (no vector search / no
+    // embeddings). Fall back to RAG only when the corpus is too large to fit.
+    const { text: transcript, videos } = await loadChannelTranscript(channelId);
+    const tokens = estimateTokens(transcript);
 
-    // Persist both turns (best-effort, don't fail the response on write error)
+    let sources: RetrievedSource[];
+    let result;
+    let mode: "full" | "rag";
+
+    if (transcript && tokens <= config.llmOnlyMaxTokens) {
+      mode = "full";
+      sources = videos.slice(0, 8).map((v) => ({
+        videoId: v.videoId,
+        videoTitle: v.videoTitle,
+        start: 0,
+        text: "",
+        score: 1,
+      }));
+      result = await answer(channelTitle, question, { mode: "full", transcript });
+    } else {
+      mode = "rag";
+      const [qVec] = await embed([question]);
+      sources = await search(channelId, qVec, 6);
+      result = await answer(channelTitle, question, { mode: "rag", sources });
+    }
+    console.log(`[CHAT] channel=${channelId} mode=${mode} ~${tokens} transcript-tokens`);
+
+    // Persist both turns (best-effort).
     try {
       await saveChatTurn(channelId, { role: "user", content: question });
-      await saveChatTurn(channelId, { role: "assistant", content: text, sources });
+      await saveChatTurn(channelId, { role: "assistant", content: result.text, sources });
     } catch (e) {
       console.warn("Failed to persist chat turn:", e);
     }
 
-    return NextResponse.json({ answer: text, sources });
+    return NextResponse.json({ answer: result.text, sources, mode });
   } catch (e: any) {
     return NextResponse.json({ error: e.message || "chat failed" }, { status: 500 });
   }

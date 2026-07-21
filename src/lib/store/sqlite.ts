@@ -12,7 +12,7 @@ import type {
 import type { SaveMeta, VideoMetaInput } from "../db";
 import { config } from "../config";
 import { cosine } from "../embeddings";
-import { joinTranscript } from "./join";
+import { joinTranscript, type JoinedTranscript } from "./join";
 
 /**
  * Local, zero-setup persistent backend (better-sqlite3). Mirrors the Postgres
@@ -300,7 +300,7 @@ export async function getEmbedStatus(channelId: string): Promise<{ processed: nu
 }
 
 // ── raw transcript reconstruction (concatenate chunks) ──
-export async function loadChannelTranscript(channelId: string): Promise<{ text: string; videoCount: number }> {
+export async function loadChannelTranscript(channelId: string): Promise<JoinedTranscript> {
   const rows = getDb()
     .prepare("SELECT video_id, video_title, chunk_text FROM embeddings WHERE channel_id = ? ORDER BY video_id, chunk_start")
     .all(channelId) as { video_id: string; video_title: string; chunk_text: string }[];

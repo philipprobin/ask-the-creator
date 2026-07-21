@@ -9,7 +9,7 @@ import type {
 import type { SaveMeta, VideoMetaInput } from "../db";
 import type { EmbedStatus } from "./backend";
 import { cosine } from "../embeddings";
-import { joinTranscript } from "./join";
+import { joinTranscript, type JoinedTranscript } from "./join";
 
 /**
  * Ephemeral in-process backend — data lives only for the Node process lifetime.
@@ -153,7 +153,7 @@ export async function getEmbedStatus(channelId: string): Promise<EmbedStatus> {
   return memStatus.get(channelId) || { processed: 0, total: 0, done: false };
 }
 
-export async function loadChannelTranscript(channelId: string): Promise<{ text: string; videoCount: number }> {
+export async function loadChannelTranscript(channelId: string): Promise<JoinedTranscript> {
   const chunks = [...(memChunks.get(channelId) || [])].sort(
     (a, b) => (a.videoId < b.videoId ? -1 : a.videoId > b.videoId ? 1 : a.start - b.start)
   );
