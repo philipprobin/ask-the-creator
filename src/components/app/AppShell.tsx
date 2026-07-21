@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { Avatar, Badge, Button, Icon, accentFor } from "@/components/ds";
+import { UsageBadge } from "./UsageBadge";
 
 export function Logo({ size = 22, onClick }: { size?: number; onClick?: () => void }) {
   return (
@@ -69,7 +70,7 @@ export function AppShell({
             <Avatar name="You" size="sm" />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)" }}>You</div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Free plan</div>
+              <UsageBadge />
             </div>
           </div>
         </div>

@@ -9,6 +9,7 @@ import type {
   ScoredVideo,
 } from "./types";
 import { joinTranscript, type JoinedTranscript } from "./store/join";
+import type { UsageAgg } from "./store/backend";
 
 let pool: Pool | null = null;
 
@@ -434,4 +435,45 @@ export async function loadChannelTranscript(
       chunk_text: r.chunk_text,
     }))
   );
+}
+
+// ── usage tracking ──
+export async function recordUsage(
+  kind: string,
+  model: string,
+  promptTokens: number,
+  completionTokens: number
+): Promise<void> {
+  const db = getPool();
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS usage (
+        id BIGSERIAL PRIMARY KEY, kind TEXT, model TEXT,
+        prompt_tokens INT, completion_tokens INT, created_at TIMESTAMPTZ DEFAULT NOW()
+      )`);
+    await db.query(
+      "INSERT INTO usage (kind, model, prompt_tokens, completion_tokens) VALUES ($1, $2, $3, $4)",
+      [kind, model, promptTokens | 0, completionTokens | 0]
+    );
+  } catch (e) {
+    console.error("Failed to record usage:", e);
+  }
+}
+
+export async function getUsage(): Promise<UsageAgg> {
+  const db = getPool();
+  try {
+    const r = await db.query(
+      `SELECT kind, model, COALESCE(SUM(prompt_tokens),0)::int AS pt,
+              COALESCE(SUM(completion_tokens),0)::int AS ct, COUNT(*)::int AS n
+       FROM usage GROUP BY kind, model`
+    );
+    return {
+      rows: r.rows.map((x) => ({
+        kind: x.kind, model: x.model, promptTokens: x.pt, completionTokens: x.ct, requests: x.n,
+      })),
+    };
+  } catch {
+    return { rows: [] };
+  }
 }

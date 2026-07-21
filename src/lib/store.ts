@@ -1,6 +1,6 @@
 import type { Chunk, RetrievedSource, EmbeddedChannel, EmbeddedVideo, ChatTurn, ScoredVideo } from "./types";
 import type { SaveMeta, VideoMetaInput } from "./db";
-import type { StoreBackend, EmbedStatus } from "./store/backend";
+import type { StoreBackend, EmbedStatus, UsageAgg } from "./store/backend";
 import type { JoinedTranscript } from "./store/join";
 import { config } from "./config";
 
@@ -86,4 +86,10 @@ export async function getEmbedStatus(channelId: string): Promise<EmbedStatus> {
 }
 export async function loadChannelTranscript(channelId: string): Promise<JoinedTranscript> {
   return (await getBackend()).loadChannelTranscript(channelId);
+}
+export async function recordUsage(kind: string, model: string, promptTokens: number, completionTokens: number): Promise<void> {
+  return (await getBackend()).recordUsage(kind, model, promptTokens, completionTokens);
+}
+export async function getUsage(): Promise<UsageAgg> {
+  return (await getBackend()).getUsage();
 }

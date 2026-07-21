@@ -13,6 +13,7 @@ import type { SaveMeta, VideoMetaInput } from "../db";
 import { config } from "../config";
 import { cosine } from "../embeddings";
 import { joinTranscript, type JoinedTranscript } from "./join";
+import type { UsageAgg } from "./backend";
 
 /**
  * Local, zero-setup persistent backend (better-sqlite3). Mirrors the Postgres
@@ -61,6 +62,11 @@ function getDb(): Database.Database {
     CREATE TABLE IF NOT EXISTS embed_progress (
       channel_id TEXT PRIMARY KEY, processed INTEGER, total INTEGER,
       done INTEGER, updated_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, model TEXT,
+      prompt_tokens INTEGER, completion_tokens INTEGER,
+      created_at TEXT DEFAULT (datetime('now'))
     );
   `);
   return db;
@@ -305,4 +311,21 @@ export async function loadChannelTranscript(channelId: string): Promise<JoinedTr
     .prepare("SELECT video_id, video_title, chunk_text FROM embeddings WHERE channel_id = ? ORDER BY video_id, chunk_start")
     .all(channelId) as { video_id: string; video_title: string; chunk_text: string }[];
   return joinTranscript(rows);
+}
+
+// ── usage tracking ──
+export async function recordUsage(kind: string, model: string, promptTokens: number, completionTokens: number): Promise<void> {
+  getDb()
+    .prepare("INSERT INTO usage (kind, model, prompt_tokens, completion_tokens) VALUES (?, ?, ?, ?)")
+    .run(kind, model, promptTokens | 0, completionTokens | 0);
+}
+
+export async function getUsage(): Promise<UsageAgg> {
+  const rows = getDb()
+    .prepare(
+      `SELECT kind, model, SUM(prompt_tokens) AS pt, SUM(completion_tokens) AS ct, COUNT(*) AS n
+       FROM usage GROUP BY kind, model`
+    )
+    .all() as { kind: string; model: string; pt: number; ct: number; n: number }[];
+  return { rows: rows.map((r) => ({ kind: r.kind, model: r.model, promptTokens: r.pt, completionTokens: r.ct, requests: r.n })) };
 }

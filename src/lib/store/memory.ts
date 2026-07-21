@@ -7,7 +7,7 @@ import type {
   ScoredVideo,
 } from "../types";
 import type { SaveMeta, VideoMetaInput } from "../db";
-import type { EmbedStatus } from "./backend";
+import type { EmbedStatus, UsageAgg } from "./backend";
 import { cosine } from "../embeddings";
 import { joinTranscript, type JoinedTranscript } from "./join";
 
@@ -21,6 +21,7 @@ const memMeta = new Map<string, SaveMeta>();
 const memChats = new Map<string, ChatTurn[]>();
 const memVideoMeta = new Map<string, VideoMetaInput[]>();
 const memStatus = new Map<string, EmbedStatus>();
+const memUsage: { kind: string; model: string; promptTokens: number; completionTokens: number }[] = [];
 
 export async function saveChunks(channelId: string, chunks: Chunk[], meta: SaveMeta): Promise<void> {
   memChunks.set(channelId, [...(memChunks.get(channelId) || []), ...chunks]);
@@ -160,4 +161,21 @@ export async function loadChannelTranscript(channelId: string): Promise<JoinedTr
   return joinTranscript(
     chunks.map((c) => ({ video_id: c.videoId, video_title: c.videoTitle, chunk_text: c.text }))
   );
+}
+
+export async function recordUsage(kind: string, model: string, promptTokens: number, completionTokens: number): Promise<void> {
+  memUsage.push({ kind, model, promptTokens: promptTokens | 0, completionTokens: completionTokens | 0 });
+}
+
+export async function getUsage(): Promise<UsageAgg> {
+  const agg = new Map<string, { kind: string; model: string; promptTokens: number; completionTokens: number; requests: number }>();
+  for (const u of memUsage) {
+    const key = `${u.kind}|${u.model}`;
+    const cur = agg.get(key) || { kind: u.kind, model: u.model, promptTokens: 0, completionTokens: 0, requests: 0 };
+    cur.promptTokens += u.promptTokens;
+    cur.completionTokens += u.completionTokens;
+    cur.requests += 1;
+    agg.set(key, cur);
+  }
+  return { rows: [...agg.values()] };
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { embed } from "@/lib/embeddings";
-import { search, hasChannel, saveChatTurn, loadChannelTranscript } from "@/lib/store";
+import { search, hasChannel, saveChatTurn, loadChannelTranscript, recordUsage } from "@/lib/store";
 import { answer } from "@/lib/chat";
 import { config } from "@/lib/config";
 import type { RetrievedSource } from "@/lib/types";
@@ -55,6 +55,14 @@ export async function POST(req: NextRequest) {
       result = await answer(channelTitle, question, { mode: "rag", sources });
     }
     console.log(`[CHAT] channel=${channelId} mode=${mode} ~${tokens} transcript-tokens`);
+
+    if (result.usage) {
+      try {
+        await recordUsage("chat", result.usage.model, result.usage.promptTokens, result.usage.completionTokens);
+      } catch (e) {
+        console.warn("Failed to record chat usage:", e);
+      }
+    }
 
     // Persist both turns (best-effort).
     try {
