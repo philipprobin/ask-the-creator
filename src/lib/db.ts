@@ -8,6 +8,8 @@ import type {
   VideoMeta,
   ScoredVideo,
 } from "./types";
+import { joinTranscript, type JoinedTranscript } from "./store/join";
+import type { UsageAgg } from "./store/backend";
 
 let pool: Pool | null = null;
 
@@ -197,8 +199,10 @@ export async function getEmbeddedVideoIds(
   channelId: string
 ): Promise<Set<string>> {
   const db = getPool();
+  // Only videos with chunks count as embedded — skipped (0-chunk) videos stay
+  // eligible for retry instead of being permanently marked done.
   const result = await db.query(
-    "SELECT video_id FROM videos WHERE channel_id = $1",
+    "SELECT video_id FROM videos WHERE channel_id = $1 AND chunk_count > 0",
     [channelId]
   );
   return new Set(result.rows.map((r) => r.video_id));
@@ -368,4 +372,110 @@ export async function getVideoMetaForIds(
     title: r.title,
     thumbnail: r.thumbnail || undefined,
   }));
+}
+
+// ─────────────────────────────────────────────────────────────
+// embed progress (temp table, mirrors the sqlite backend)
+// ─────────────────────────────────────────────────────────────
+
+export async function setEmbedStatus(
+  channelId: string,
+  processed: number,
+  total: number,
+  done: boolean
+): Promise<void> {
+  const db = getPool();
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS embed_progress (
+        channel_id TEXT PRIMARY KEY, processed INT, total INT,
+        done BOOLEAN, updated_at TIMESTAMPTZ DEFAULT NOW()
+      )`);
+    await db.query(
+      `INSERT INTO embed_progress (channel_id, processed, total, done)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (channel_id) DO UPDATE
+         SET processed = $2, total = $3, done = $4, updated_at = NOW()`,
+      [channelId, processed, total, done]
+    );
+  } catch (e) {
+    console.error("Failed to set embed status:", e);
+  }
+}
+
+export async function getEmbedStatus(
+  channelId: string
+): Promise<{ processed: number; total: number; done: boolean }> {
+  const db = getPool();
+  try {
+    const r = await db.query(
+      "SELECT processed, total, done FROM embed_progress WHERE channel_id = $1",
+      [channelId]
+    );
+    if (r.rows.length === 0) return { processed: 0, total: 0, done: false };
+    return { processed: r.rows[0].processed, total: r.rows[0].total, done: r.rows[0].done };
+  } catch (e) {
+    console.error("Failed to get embed status:", e);
+    return { processed: 0, total: 0, done: false };
+  }
+}
+
+/** Reconstruct a channel's transcript by concatenating stored chunks in order. */
+export async function loadChannelTranscript(
+  channelId: string
+): Promise<JoinedTranscript> {
+  const db = getPool();
+  const result = await db.query(
+    `SELECT video_id, video_title, chunk_text FROM embeddings
+     WHERE channel_id = $1 ORDER BY video_id, chunk_start`,
+    [channelId]
+  );
+  return joinTranscript(
+    result.rows.map((r) => ({
+      video_id: r.video_id,
+      video_title: r.video_title,
+      chunk_text: r.chunk_text,
+    }))
+  );
+}
+
+// ── usage tracking ──
+export async function recordUsage(
+  kind: string,
+  model: string,
+  promptTokens: number,
+  completionTokens: number
+): Promise<void> {
+  const db = getPool();
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS usage (
+        id BIGSERIAL PRIMARY KEY, kind TEXT, model TEXT,
+        prompt_tokens INT, completion_tokens INT, created_at TIMESTAMPTZ DEFAULT NOW()
+      )`);
+    await db.query(
+      "INSERT INTO usage (kind, model, prompt_tokens, completion_tokens) VALUES ($1, $2, $3, $4)",
+      [kind, model, promptTokens | 0, completionTokens | 0]
+    );
+  } catch (e) {
+    console.error("Failed to record usage:", e);
+  }
+}
+
+export async function getUsage(): Promise<UsageAgg> {
+  const db = getPool();
+  try {
+    const r = await db.query(
+      `SELECT kind, model, COALESCE(SUM(prompt_tokens),0)::int AS pt,
+              COALESCE(SUM(completion_tokens),0)::int AS ct, COUNT(*)::int AS n
+       FROM usage GROUP BY kind, model`
+    );
+    return {
+      rows: r.rows.map((x) => ({
+        kind: x.kind, model: x.model, promptTokens: x.pt, completionTokens: x.ct, requests: x.n,
+      })),
+    };
+  } catch {
+    return { rows: [] };
+  }
 }

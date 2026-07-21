@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { Avatar, Badge, Button, Icon, accentFor } from "@/components/ds";
+import { UsageBadge } from "./UsageBadge";
 
 export function Logo({ size = 22, onClick }: { size?: number; onClick?: () => void }) {
   return (
@@ -40,7 +41,7 @@ function NavItem({ label, active, dotColor, onClick }: { label: string; active?:
 export interface Recent { id: string; title: string }
 
 export function AppShell({
-  children, recents = [], activeId, onHome, onNew, onSelectRecent,
+  children, recents = [], activeId, onHome, onNew, onSelectRecent, onSettings,
 }: {
   children: React.ReactNode;
   recents?: Recent[];
@@ -48,6 +49,7 @@ export function AppShell({
   onHome?: () => void;
   onNew?: () => void;
   onSelectRecent?: (id: string) => void;
+  onSettings?: () => void;
 }) {
   return (
     <div style={{ display: "flex", height: "100dvh", background: "var(--surface-page)", fontFamily: "var(--font-sans)" }}>
@@ -69,8 +71,16 @@ export function AppShell({
             <Avatar name="You" size="sm" />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)" }}>You</div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Free plan</div>
+              <UsageBadge />
             </div>
+            {onSettings && (
+              <button onClick={onSettings} aria-label="Einstellungen" title="Einstellungen · API-Keys"
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-sunken)"; e.currentTarget.style.color = "var(--text-body)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-subtle)"; }}
+                style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 8, border: "none", background: "transparent", color: "var(--text-subtle)", cursor: "pointer", display: "grid", placeItems: "center", transition: "background .12s, color .12s" }}>
+                <Icon name="settings" size={17} />
+              </button>
+            )}
           </div>
         </div>
       </aside>

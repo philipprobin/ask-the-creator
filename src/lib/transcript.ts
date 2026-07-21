@@ -1,64 +1,53 @@
-import { hasYouTube } from "./config";
+import { hasOpenAI, config } from "./config";
 import type { TranscriptSegment } from "./types";
 
 /**
  * Fetch a transcript for a video.
- * Strategy:
- *  1. Try Supadata API (bypasses YouTube IP blocks)
- *  2. Fall back to scraping watch page + timedtext
- *  3. If real sources exist but all fail/return nothing -> [] (caller skips the
- *     video). Mock is used ONLY in pure dev mode with no transcript sources
- *     configured — never as a production fallback, so a failed fetch can't
- *     pollute the index with placeholder text.
+ *
+ * Transcripts come from the Supadata API (SUPADATA_API_KEY). Keyless YouTube
+ * extraction (InnerTube / timedtext scraping) was dropped: YouTube's anti-bot
+ * measures (nsig / PO tokens) make it unreliable and a constant maintenance
+ * treadmill. Supadata abstracts that away and works from any IP.
+ *
+ * Behavior:
+ *  - No YouTube key at all -> offline/demo mode: channels & IDs are mocked, so
+ *    return a mock transcript (never hits the network).
+ *  - Real mode, no SUPADATA_API_KEY -> can't fetch -> [] (caller skips the video).
+ *  - Real mode with key -> Supadata; on failure/empty -> [] (skip cleanly, never
+ *    substitute mock content in production).
  */
 export async function fetchTranscript(
   videoId: string,
   videoTitle: string
 ): Promise<TranscriptSegment[]> {
-  const supadataKey = process.env.SUPADATA_API_KEY;
-  const hasRealSource = !!supadataKey || hasYouTube();
-
-  // Try Supadata first if key is available
-  if (supadataKey) {
-    try {
-      const segments = await fetchSupadataTranscript(videoId, supadataKey);
-      if (segments.length > 0) {
-        console.log(`✓ Supadata transcript for ${videoId}: ${segments.length} segments`);
-        return segments;
-      }
-    } catch (err) {
-      console.warn(`Supadata failed for ${videoId}:`, err);
-    }
+  if (!hasOpenAI()) {
+    // Pure demo mode (no OpenAI key) — channels/videos are mocked too.
+    console.log(`⚠ Using mock transcript for ${videoId} (${videoTitle})`);
+    return mockTranscript(videoTitle);
   }
 
-  // Fall back to scraping if we have YouTube API key
-  if (hasYouTube()) {
-    try {
-      const segments = await fetchScrapedTranscript(videoId);
-      if (segments.length > 0) {
-        console.log(`✓ Scraped transcript for ${videoId}: ${segments.length} segments`);
-        return segments;
-      }
-    } catch (err) {
-      console.warn(`Scraping failed for ${videoId}:`, err);
-    }
-  }
-
-  // Real sources configured but none produced a transcript -> skip cleanly.
-  // (Never substitute mock content in production; that would pollute the index.)
-  if (hasRealSource) {
-    console.warn(`✗ No transcript available for ${videoId} (${videoTitle}) — skipping`);
+  const supadataKey = config.supadataKey;
+  if (!supadataKey) {
+    console.warn(`✗ SUPADATA_API_KEY not set — cannot fetch transcript for ${videoId}; skipping`);
     return [];
   }
 
-  // Pure dev mode: no transcript sources configured at all — mock so the app
-  // stays usable offline.
-  console.log(`⚠ Using mock transcript for ${videoId} (${videoTitle})`);
-  return mockTranscript(videoTitle);
+  try {
+    const segments = await fetchSupadataTranscript(videoId, supadataKey);
+    if (segments.length > 0) {
+      console.log(`✓ Supadata transcript for ${videoId}: ${segments.length} segments`);
+      return segments;
+    }
+  } catch (err) {
+    console.warn(`Supadata failed for ${videoId}:`, err);
+  }
+
+  console.warn(`✗ No transcript available for ${videoId} (${videoTitle}) — skipping`);
+  return [];
 }
 
 /**
- * Fetch transcript via Supadata API
+ * Fetch transcript via Supadata API.
  * Docs: https://docs.supadata.ai/api-reference/endpoint/transcript/transcript
  */
 async function fetchSupadataTranscript(
@@ -66,143 +55,32 @@ async function fetchSupadataTranscript(
   apiKey: string
 ): Promise<TranscriptSegment[]> {
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  const url = `https://api.supadata.ai/v1/transcript?url=${encodeURIComponent(
-    videoUrl
-  )}&mode=auto&lang=en`;
+  const url = `https://api.supadata.ai/v1/transcript?url=${encodeURIComponent(videoUrl)}&mode=auto&lang=en`;
 
-  const res = await fetch(url, {
-    headers: {
-      "x-api-key": apiKey,
-    },
-  });
-
+  const res = await fetch(url, { headers: { "x-api-key": apiKey } });
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
-    throw new Error(
-      `Supadata ${res.status}: ${error.message || "Unknown error"}`
-    );
+    throw new Error(`Supadata ${res.status}: ${error.message || "Unknown error"}`);
   }
-
   const data = await res.json();
 
-  // Handle async job response
+  // Async job response = video too large for sync transcription.
   if (data.jobId) {
-    throw new Error(
-      `Video too large, got jobId ${data.jobId} - async processing not yet implemented`
-    );
+    throw new Error(`Video too large, got jobId ${data.jobId} - async processing not yet implemented`);
   }
-
-  // Parse content (array of chunks or plain text)
   const content = data.content;
-  if (!content) {
-    throw new Error("No content in Supadata response");
-  }
+  if (!content) throw new Error("No content in Supadata response");
 
-  // If plain text mode (text=true), split into segments
   if (typeof content === "string") {
-    // Simple split by sentence
     const sentences = content.match(/[^.!?]+[.!?]+/g) || [content];
-    return sentences.map((text, i) => ({
-      text: text.trim(),
-      start: i * 30, // fake timestamps
-      duration: 30,
-    }));
+    return sentences.map((text, i) => ({ text: text.trim(), start: i * 30, duration: 30 }));
   }
-
-  // Array of chunks with offset/duration (in milliseconds)
+  // Array of chunks with offset/duration in ms.
   return content.map((chunk: any) => ({
     text: chunk.text || "",
-    start: (chunk.offset || 0) / 1000, // ms → seconds
+    start: (chunk.offset || 0) / 1000,
     duration: (chunk.duration || 0) / 1000,
   }));
-}
-
-/**
- * Original scraping method (brittle, blocked on many IPs)
- */
-async function fetchScrapedTranscript(
-  videoId: string
-): Promise<TranscriptSegment[]> {
-  const tracks = await getCaptionTracks(videoId);
-  if (!tracks.length) return [];
-
-  // Prefer English, non-ASR
-  const sorted = [...tracks].sort((a, b) => {
-    const aEn = a.languageCode?.startsWith("en") ? 0 : 1;
-    const bEn = b.languageCode?.startsWith("en") ? 0 : 1;
-    if (aEn !== bEn) return aEn - bEn;
-    const aAsr = a.kind === "asr" ? 1 : 0;
-    const bAsr = b.kind === "asr" ? 1 : 0;
-    return aAsr - bAsr;
-  });
-
-  const track = sorted[0];
-  return await fetchTrack(track.baseUrl);
-}
-
-interface CaptionTrack {
-  baseUrl: string;
-  languageCode: string;
-  kind?: string;
-}
-
-async function getCaptionTracks(videoId: string): Promise<CaptionTrack[]> {
-  const res = await fetch(
-    `https://www.youtube.com/watch?v=${videoId}&hl=en`,
-    {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
-      },
-    }
-  );
-  const html = await res.text();
-  const m = html.match(
-    /ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;\s*(?:var|<\/script>)/s
-  );
-  if (!m) return [];
-
-  let json: any;
-  try {
-    json = JSON.parse(m[1]);
-  } catch {
-    return [];
-  }
-
-  const tracks =
-    json?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
-  return tracks.map((t: any) => ({
-    baseUrl: t.baseUrl,
-    languageCode: t.languageCode,
-    kind: t.kind,
-  }));
-}
-
-async function fetchTrack(baseUrl: string): Promise<TranscriptSegment[]> {
-  const url = baseUrl.includes("fmt=") ? baseUrl : `${baseUrl}&fmt=json3`;
-  const res = await fetch(url);
-  if (!res.ok) return [];
-
-  const data = await res.json();
-  const events = data.events || [];
-  const segments: TranscriptSegment[] = [];
-
-  for (const ev of events) {
-    if (!ev.segs) continue;
-    const text = ev.segs
-      .map((s: any) => s.utf8)
-      .join("")
-      .replace(/\n/g, " ")
-      .trim();
-    if (!text) continue;
-    segments.push({
-      text,
-      start: (ev.tStartMs || 0) / 1000,
-      duration: (ev.dDurationMs || 0) / 1000,
-    });
-  }
-  return segments;
 }
 
 function mockTranscript(videoTitle: string): TranscriptSegment[] {

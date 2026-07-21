@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import type { Channel, ChatTurn, RetrievedSource } from "@/lib/types";
-import { Avatar, Badge, IconButton, Textarea, Spinner, Icon, accentFor } from "@/components/ds";
+import { Avatar, Badge, IconButton, Textarea, Spinner, Icon, Markdown, accentFor } from "@/components/ds";
 import { ytThumb } from "@/lib/media";
 
 function fmtTime(s: number): string {
@@ -25,7 +25,7 @@ function SourceChip({ s, i }: { s: RetrievedSource; i: number }) {
       <span style={{ position: "relative", width: 46, height: 28, borderRadius: 6, overflow: "hidden", flexShrink: 0, background: accent.grad, display: "grid", placeItems: "center" }}>
         {!broken ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={ytThumb(s.videoId)} alt="" onError={() => setBroken(true)}
+          <img src={ytThumb(s.videoId)} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)}
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
           <Icon name="play" size={12} color="#fff" />
@@ -65,12 +65,12 @@ function AnswerBubble({ creator, turn, streaming }: { creator: Channel; turn?: C
           </div>
         ) : (
           <>
-            <p style={{ margin: 0, fontSize: 15, lineHeight: 1.68, color: "var(--text-body)", whiteSpace: "pre-wrap" }}>{turn.content}</p>
+            <Markdown>{turn.content}</Markdown>
             {turn.sources && turn.sources.length > 0 && (
               <div style={{ marginTop: 14 }}>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-subtle)", marginBottom: 8 }}>Sources</div>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  {turn.sources.slice(0, 6).map((s, i) => <SourceChip key={i} s={s} i={i + 1} />)}
+                  {turn.sources.map((s, i) => <SourceChip key={i} s={s} i={i + 1} />)}
                 </div>
               </div>
             )}

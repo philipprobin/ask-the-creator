@@ -1,4 +1,5 @@
 import { config, hasOpenAI } from "./config";
+import { recordUsage } from "./store";
 
 const OPENAI = "https://api.openai.com/v1";
 
@@ -32,6 +33,10 @@ export async function embed(texts: string[]): Promise<number[][]> {
     throw new Error(`OpenAI embeddings failed: ${res.status} ${err}`);
   }
   const data = await res.json();
+  if (data.usage?.prompt_tokens) {
+    // Best-effort — never fail an embed on a usage-write error.
+    recordUsage("embed", config.embedModel, data.usage.prompt_tokens, 0).catch(() => {});
+  }
   return data.data.map((d: any) => d.embedding);
 }
 

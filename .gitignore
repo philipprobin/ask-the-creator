@@ -7,3 +7,12 @@ out
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
+
+# local SQLite data (default storage backend)
+/data
+*.db
+*.db-shm
+*.db-wal
+
+# local design assets / archives (not part of the repo)
+*.zip

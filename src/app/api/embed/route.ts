@@ -8,6 +8,7 @@ import {
   getVideoMetaForIds,
 } from "@/lib/store";
 import { setEmbedStatus } from "@/lib/embed-status";
+import { hasOpenAI, hasSupadata } from "@/lib/config";
 import type { Chunk } from "@/lib/types";
 import type { SaveMeta } from "@/lib/db";
 
@@ -36,6 +37,16 @@ export async function POST(req: NextRequest) {
 
     if (!channelId || videoIds.length === 0) {
       return NextResponse.json({ error: "channelId and videoIds required" }, { status: 400 });
+    }
+
+    // Real mode needs a transcript source. Without a Supadata key every video
+    // would be skipped and produce an empty index — fail fast with a clear hint
+    // instead. (Mock mode, i.e. no OpenAI key, generates demo transcripts.)
+    if (hasOpenAI() && !hasSupadata()) {
+      return NextResponse.json(
+        { error: "Kein Supadata-Key gesetzt — Transkripte können nicht geladen werden. Trage in den Einstellungen (⚙) einen Supadata-Key ein." },
+        { status: 400 }
+      );
     }
 
     const total = videoIds.length;

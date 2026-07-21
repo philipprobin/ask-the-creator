@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
+/** Whether a site password is configured (so the gate can be skipped if not). */
+export async function GET() {
+  return NextResponse.json({ required: !!process.env.SITE_PASSWORD });
+}
+
 export async function POST(req: NextRequest) {
   const sitePassword = process.env.SITE_PASSWORD;
 
