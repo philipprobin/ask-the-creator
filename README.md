@@ -39,10 +39,12 @@ Same thing, containerized. Set keys in the wizard or pass them as environment va
 | Key | Purpose | Required? | Where |
 |---|---|---|---|
 | **OpenAI** | Embeddings + answer generation | **Yes** | [platform.openai.com](https://platform.openai.com/api-keys) |
-| **YouTube Data API v3** | Channel search + video metadata | Recommended (free) | [Google Cloud Console](https://console.cloud.google.com/apis/library/youtube.googleapis.com) |
+| **YouTube Data API v3** | Channel search + video metadata | Optional (keyless fallback) | [Google Cloud Console](https://console.cloud.google.com/apis/library/youtube.googleapis.com) |
 | **Supadata** | YouTube transcripts | Recommended (free tier) | [supadata.ai](https://supadata.ai) |
 
-> **Why Supadata for transcripts?** Keyless extraction (youtubei.js / timedtext scraping) is actively blocked by YouTube's anti-bot measures. Supadata fetches transcripts reliably from any IP, so we rely on it instead of a fragile scraper.
+> **No GCP key?** Channel search + video metadata fall back to keyless `youtubei.js`, so the YouTube Data API key is optional (a set key is used when present — it's more robust and includes descriptions). Only two caveats: keyless scoring is title-only, and youtubei.js can break when YouTube changes its internals.
+>
+> **Why Supadata for transcripts?** Transcript extraction *is* reliably blocked by YouTube's anti-bot measures (youtubei.js `get_transcript` / timedtext), so transcripts do need Supadata (free tier) — there's no keyless path there.
 
 Enter keys in the in-app wizard (saved to `data/config.json`, git-ignored) or via environment variables. **Environment variables always win** — set them in hosted deploys.
 
