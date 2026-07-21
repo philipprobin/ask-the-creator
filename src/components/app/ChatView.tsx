@@ -70,7 +70,7 @@ function AnswerBubble({ creator, turn, streaming }: { creator: Channel; turn?: C
               <div style={{ marginTop: 14 }}>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-subtle)", marginBottom: 8 }}>Sources</div>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  {turn.sources.slice(0, 6).map((s, i) => <SourceChip key={i} s={s} i={i + 1} />)}
+                  {turn.sources.map((s, i) => <SourceChip key={i} s={s} i={i + 1} />)}
                 </div>
               </div>
             )}

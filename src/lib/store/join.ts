@@ -19,8 +19,11 @@ export function joinTranscript(
   }
   const blocks: string[] = [];
   const videos: { videoId: string; videoTitle: string }[] = [];
+  let i = 0;
   for (const [videoId, { title, parts }] of byVideo) {
-    blocks.push(`## ${title}\n${parts.join(" ")}`);
+    i++;
+    // Number each video so the model can cite it as [i], matching the source chips.
+    blocks.push(`[${i}] ${title}\n${parts.join(" ")}`);
     videos.push({ videoId, videoTitle: title });
   }
   return { text: blocks.join("\n\n"), videos };

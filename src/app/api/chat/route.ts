@@ -40,7 +40,9 @@ export async function POST(req: NextRequest) {
 
     if (transcript && tokens <= config.llmOnlyMaxTokens) {
       mode = "full";
-      sources = videos.slice(0, 8).map((v) => ({
+      // One source per video, in the same order they're numbered in the stuffed
+      // transcript — so a [n] citation in the answer maps to source chip n.
+      sources = videos.map((v) => ({
         videoId: v.videoId,
         videoTitle: v.videoTitle,
         start: 0,

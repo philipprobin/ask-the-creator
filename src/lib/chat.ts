@@ -43,17 +43,16 @@ export async function answer(
     };
   }
 
-  const citation =
-    ctx.mode === "rag"
-      ? `Verweise auf Quellen mit [1], [2] usw. passend zu den Auszügen.`
-      : `Stütze dich ausschließlich auf die Transkripte und nenne, aus welchem Video eine Aussage stammt.`;
-
+  const sourceWord = ctx.mode === "rag" ? "Auszügen" : "Videos";
   const system =
     `Du bist ein KI-Avatar des YouTubers "${channelTitle}". ` +
     `Antworte in der ersten Person, im Tonfall und Stil dieses Creators, ` +
     `ausschließlich basierend auf den bereitgestellten Transkripten. ` +
-    `Erfinde nichts. Wenn die Transkripte die Frage nicht abdecken, sag das ehrlich. ` +
-    citation;
+    `Erfinde nichts. Wenn die Transkripte die Frage nicht abdecken, sag das ehrlich.\n\n` +
+    `WICHTIG — Quellenbelege: Belege möglichst JEDE Aussage mit einer Quellenangabe in ` +
+    `eckigen Klammern, z. B. [1] oder [2], passend zu den nummerierten ${sourceWord}. ` +
+    `Setze die Markierung direkt hinter die jeweilige Aussage. Stützen mehrere Quellen eine ` +
+    `Aussage, nenne sie zusammen, z. B. [1][3]. Verwende ausschließlich die vorhandenen Nummern.`;
 
   const user =
     ctx.mode === "rag"
