@@ -6,8 +6,8 @@ import { AppShell, TopBar } from "@/components/app/AppShell";
 import { CreatorPicker } from "@/components/app/CreatorPicker";
 import { SourceSelect } from "@/components/app/SourceSelect";
 import { ChatView } from "@/components/app/ChatView";
+import { SetupWizard, type ConfigStatus } from "@/components/app/SetupWizard";
 import { Badge } from "@/components/ds";
-import type { BuildResult } from "@/components/app/types";
 
 type Stage = "pick" | "source" | "chat";
 
@@ -17,10 +17,20 @@ export default function Home() {
   const [question, setQuestion] = useState<string>("");
   const [library, setLibrary] = useState<EmbeddedChannel[]>([]);
 
+  const [setup, setSetup] = useState<ConfigStatus | "ok" | null>(null);
+
   const refreshLibrary = useCallback(() => {
     fetch("/api/channels").then((r) => r.json()).then((d) => setLibrary(d.channels || [])).catch(() => {});
   }, []);
   useEffect(() => { refreshLibrary(); }, [refreshLibrary]);
+
+  const checkSetup = useCallback(() => {
+    fetch("/api/config/status")
+      .then((r) => r.json())
+      .then((s: ConfigStatus) => setSetup(s.hasOpenAI ? "ok" : s))
+      .catch(() => setSetup("ok")); // don't block the app if the check fails
+  }, []);
+  useEffect(() => { checkSetup(); }, [checkSetup]);
 
   const home = () => { setStage("pick"); setCreator(null); setQuestion(""); refreshLibrary(); };
   const pick = (c: Channel) => { setCreator(c); setQuestion(""); setStage("source"); };
@@ -32,6 +42,9 @@ export default function Home() {
     setQuestion("");
     setStage("chat");
   };
+
+  if (setup === null) return null; // checking config
+  if (setup !== "ok") return <SetupWizard status={setup} onDone={checkSetup} />;
 
   let body: React.ReactNode, title = "Discover", subtitle: string | undefined, right: React.ReactNode = null;
   if (stage === "pick") {

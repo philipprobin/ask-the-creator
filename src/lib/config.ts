@@ -1,4 +1,8 @@
+import fs from "fs";
+import path from "path";
+
 export type StorageBackend = "pgvector" | "sqlite" | "memory";
+export type KeyName = "OPENAI_API_KEY" | "YOUTUBE_API_KEY" | "SUPADATA_API_KEY";
 
 function resolveBackend(): StorageBackend {
   const explicit = process.env.STORAGE_BACKEND as StorageBackend | undefined;
@@ -10,9 +14,45 @@ function resolveBackend(): StorageBackend {
   return process.env.DATABASE_URL ? "pgvector" : "sqlite";
 }
 
+// ── Locally-saved keys (from the in-app setup wizard) ──
+// Env vars always win, so on Vercel/hosted the keys come from the environment
+// (read-only) and this file is irrelevant. Locally the wizard writes them here.
+const LOCAL_CONFIG_PATH = process.env.LOCAL_CONFIG_PATH || "data/config.json";
+let fileKeys: Partial<Record<KeyName, string>> = loadFileKeys();
+
+function loadFileKeys(): Partial<Record<KeyName, string>> {
+  try {
+    return JSON.parse(fs.readFileSync(path.resolve(LOCAL_CONFIG_PATH), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function resolveKey(name: KeyName): string {
+  return process.env[name] || fileKeys[name] || "";
+}
+
+/** True when the key is supplied by the environment (i.e. not editable in-app). */
+export function isEnvKey(name: KeyName): boolean {
+  return !!process.env[name];
+}
+
+/** Persist keys to the local config file (self-host). No-op values are ignored. */
+export function setLocalKeys(partial: Partial<Record<KeyName, string>>): void {
+  const clean: Partial<Record<KeyName, string>> = {};
+  for (const [k, v] of Object.entries(partial)) {
+    if (typeof v === "string" && v.trim()) clean[k as KeyName] = v.trim();
+  }
+  fileKeys = { ...fileKeys, ...clean };
+  const p = path.resolve(LOCAL_CONFIG_PATH);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, JSON.stringify(fileKeys, null, 2), { mode: 0o600 });
+}
+
 export const config = {
-  openaiKey: process.env.OPENAI_API_KEY || "",
-  youtubeKey: process.env.YOUTUBE_API_KEY || "",
+  get openaiKey() { return resolveKey("OPENAI_API_KEY"); },
+  get youtubeKey() { return resolveKey("YOUTUBE_API_KEY"); },
+  get supadataKey() { return resolveKey("SUPADATA_API_KEY"); },
   databaseUrl: process.env.DATABASE_URL || "",
   chatModel: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
   embedModel: process.env.OPENAI_EMBED_MODEL || "text-embedding-3-small",
@@ -41,6 +81,7 @@ export function costUsd(model: string, promptTokens: number, completionTokens: n
 
 export const hasOpenAI = () => config.openaiKey.length > 0;
 export const hasYouTube = () => config.youtubeKey.length > 0;
+export const hasSupadata = () => config.supadataKey.length > 0;
 export const hasDatabase = () => config.databaseUrl.length > 0;
 
 /** True when any core integration is missing -> features fall back to mock data. */

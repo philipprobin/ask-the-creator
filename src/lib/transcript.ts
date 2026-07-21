@@ -1,4 +1,4 @@
-import { hasYouTube } from "./config";
+import { hasYouTube, config } from "./config";
 import type { TranscriptSegment } from "./types";
 
 /**
@@ -25,7 +25,7 @@ export async function fetchTranscript(
     return mockTranscript(videoTitle);
   }
 
-  const supadataKey = process.env.SUPADATA_API_KEY;
+  const supadataKey = config.supadataKey;
   if (!supadataKey) {
     console.warn(`✗ SUPADATA_API_KEY not set — cannot fetch transcript for ${videoId}; skipping`);
     return [];
